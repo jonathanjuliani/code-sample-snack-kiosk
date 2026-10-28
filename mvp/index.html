@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snack Bar Kiosk — MVP mockup</title>
+<style>
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-label: 18px;
+  --text-body: 20px;
+  --text-item: 24px;
+  --text-heading: 32px;
+  --text-total: 40px;
+  --text-display: 56px;
+  --weight-regular: 500;
+  --weight-strong: 700;
+  --leading-body: 1.35;
+  --leading-tight: 1.1;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 48px;
+
+  --target-min: 56px;
+  --target-primary: 72px;
+  --target-numpad: 80px;
+  --tile-min: 160px;
+
+  --color-bg: #F5F4F0;
+  --color-surface: #FFFFFF;
+  --color-text: #14161A;
+  --color-text-muted: #4A4F57;
+  --color-action: #14161A;
+  --color-accent: #1D4ED8;
+  --color-success: #1E7A3C;
+  --color-warning: #8A5A00;
+  --color-warning-surface: #FFF4D6;
+  --color-error: #B3261E;
+  --color-error-surface: #FDECEA;
+  --color-disabled-surface: #E4E3DE;
+  --color-disabled-text: #5C6169;
+  --color-border: #D6D4CE;
+
+  --radius-control: 8px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  --duration-press: 120ms;
+  --duration-state: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-press: 0ms; --duration-state: 0ms; }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--font-sans);
+  background: #2A2C30;
+  color: var(--color-text);
+  display: flex;
+  overflow: hidden;
+}
+
+/* ---------- mock harness (not part of the kiosk) ---------- */
+#viewport { flex: 1; position: relative; overflow: hidden; }
+#frame { position: absolute; left: 50%; top: 50%; transform-origin: center center; box-shadow: 0 0 0 14px #111, 0 20px 60px rgba(0,0,0,.5); border-radius: 4px; }
+#dev {
+  width: 280px; background: #1B1D21; color: #E6E6E6; padding: 16px; font-size: 14px;
+  overflow-y: auto; border-left: 1px solid #333;
+}
+#dev h2 { font-size: 15px; margin: 0 0 4px; }
+#dev p.hint { color: #9AA0A8; margin: 0 0 14px; font-size: 12px; line-height: 1.4; }
+#dev fieldset { border: 1px solid #333; border-radius: 6px; margin: 0 0 12px; padding: 8px 10px; }
+#dev legend { color: #9AA0A8; font-size: 12px; padding: 0 4px; }
+#dev label { display: flex; gap: 8px; align-items: center; margin: 4px 0; cursor: pointer; }
+#dev select, #dev button { width: 100%; font: inherit; padding: 6px 8px; border-radius: 4px; border: 1px solid #444; background: #2A2D33; color: inherit; cursor: pointer; }
+#dev button + button { margin-top: 6px; }
+#dev .readout { font-family: ui-monospace, monospace; font-size: 12px; color: #9AA0A8; white-space: pre-wrap; }
+
+/* ---------- kiosk stage ---------- */
+#stage {
+  width: 1280px; height: 800px; position: relative; overflow: hidden;
+  background: var(--color-bg); font-size: var(--text-body); line-height: var(--leading-body);
+  font-weight: var(--weight-regular); user-select: none; -webkit-user-select: none;
+  touch-action: manipulation;
+}
+#stage.portrait { width: 800px; height: 1280px; }
+.num { font-variant-numeric: tabular-nums; }
+
+button.k {
+  font: inherit; font-weight: var(--weight-strong); border: 0; cursor: pointer;
+  min-height: var(--target-min); padding: 0 var(--space-5); border-radius: var(--radius-control);
+  transition: transform var(--duration-press) var(--ease-standard), background var(--duration-press);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+}
+button.k:active { transform: scale(0.97); }
+button.k:focus-visible { outline: 4px solid var(--color-accent); outline-offset: 2px; }
+.k-primary { background: var(--color-action); color: var(--color-surface); min-height: var(--target-primary) !important; font-size: var(--text-item); }
+.k-secondary { background: var(--color-surface); color: var(--color-text); border: 2px solid var(--color-text) !important; }
+.k-quiet { background: transparent; color: var(--color-text); border: 2px solid var(--color-border) !important; }
+button.k:disabled { background: var(--color-disabled-surface); color: var(--color-disabled-text); border-color: transparent !important; cursor: not-allowed; transform: none; }
+
+/* screens */
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+/* start */
+.start { align-items: center; justify-content: center; text-align: center; cursor: pointer; gap: var(--space-5); }
+.start .brand { font-size: var(--text-heading); font-weight: var(--weight-strong); color: var(--color-text-muted); }
+.start .cta { font-size: 72px; font-weight: var(--weight-strong); line-height: var(--leading-tight); }
+.start .sub { font-size: var(--text-item); color: var(--color-text-muted); }
+.start .unavailable { background: var(--color-warning-surface); border: 2px solid var(--color-warning); border-radius: var(--radius-card); padding: var(--space-5) var(--space-6); max-width: 640px; }
+
+/* header */
+.hdr { height: 80px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-5); border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+.hdr .title { font-size: var(--text-item); font-weight: var(--weight-strong); }
+.hdr .slot { width: 180px; display: flex; }
+.hdr .slot.r { justify-content: flex-end; }
+
+.strip { flex: none; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); background: var(--color-warning-surface); border-bottom: 2px solid var(--color-warning); color: var(--color-text); font-weight: var(--weight-strong); }
+.strip svg { color: var(--color-warning); flex: none; }
+
+/* order screen */
+.body { flex: 1; display: flex; min-height: 0; }
+.menu { flex: 1; display: flex; flex-direction: column; padding: var(--space-5); gap: var(--space-4); min-width: 0; }
+.tabs { display: flex; gap: var(--space-3); flex: none; }
+.tab { flex: 1; font-size: var(--text-body) !important; background: var(--color-surface); color: var(--color-text); border: 2px solid var(--color-border) !important; }
+.tab[aria-selected="true"] { border-color: var(--color-accent) !important; color: var(--color-accent); box-shadow: inset 0 -4px 0 var(--color-accent); }
+.grid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: var(--space-4); min-height: 0; }
+.tile {
+  font: inherit; text-align: left; border: 2px solid var(--color-border); border-radius: var(--radius-card);
+  background: var(--color-surface); padding: var(--space-4); display: flex; flex-direction: column; justify-content: space-between;
+  min-height: var(--tile-min); cursor: pointer; position: relative; color: var(--color-text);
+  transition: transform var(--duration-press) var(--ease-standard), border-color var(--duration-press);
+}
+.tile:active { transform: scale(0.98); border-color: var(--color-accent); }
+.tile .glyph { width: 56px; height: 56px; border-radius: var(--radius-control); background: var(--color-bg); display: grid; place-items: center; color: var(--color-text-muted); }
+.tile .name { font-size: var(--text-item); font-weight: var(--weight-strong); line-height: var(--leading-tight); }
+.tile .meta { display: flex; justify-content: space-between; align-items: end; gap: var(--space-2); }
+.tile .price { font-size: var(--text-item); font-weight: var(--weight-strong); }
+.tile .opt { font-size: var(--text-label); color: var(--color-text-muted); }
+.tile .badge { position: absolute; top: var(--space-4); right: var(--space-4); background: var(--color-action); color: var(--color-surface); border-radius: var(--radius-pill); min-width: 40px; height: 40px; display: grid; place-items: center; font-weight: var(--weight-strong); padding: 0 var(--space-3); }
+.tile.soldout { opacity: 1; background: var(--color-disabled-surface); color: var(--color-disabled-text); cursor: not-allowed; border-style: dashed; }
+.tile.soldout .glyph { background: transparent; }
+.tile.soldout .tag { font-weight: var(--weight-strong); }
+.tile.flash { animation: flash 400ms var(--ease-standard); }
+@keyframes flash { 0% { border-color: var(--color-accent); } 100% { border-color: var(--color-border); } }
+.pager { flex: none; display: flex; justify-content: space-between; align-items: center; }
+.pager .where { color: var(--color-text-muted); }
+
+/* order panel */
+.panel { width: 420px; flex: none; background: var(--color-surface); border-left: 1px solid var(--color-border); display: flex; flex-direction: column; min-height: 0; }
+.panel h2 { font-size: var(--text-item); margin: 0; padding: var(--space-5) var(--space-5) var(--space-3); }
+.lines { flex: 1; overflow-y: auto; padding: 0 var(--space-5); min-height: 0; }
+.empty { color: var(--color-text-muted); padding: var(--space-6) 0; text-align: center; }
+.line { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+.line .ln { font-weight: var(--weight-strong); }
+.line .lo { font-size: var(--text-label); color: var(--color-text-muted); }
+.line .lp { font-weight: var(--weight-strong); text-align: right; }
+.line.added { animation: added var(--duration-state) var(--ease-standard); }
+@keyframes added { from { background: #E8EEFB; } to { background: transparent; } }
+.stepper { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-3); }
+.stepper button { width: var(--target-min); padding: 0 !important; }
+.stepper .q { min-width: 40px; text-align: center; font-weight: var(--weight-strong); font-size: var(--text-item); }
+.foot { flex: none; padding: var(--space-5); border-top: 1px solid var(--color-border); display: flex; flex-direction: column; gap: var(--space-4); }
+.totalrow { display: flex; justify-content: space-between; align-items: baseline; }
+.totalrow .cnt { color: var(--color-text-muted); }
+.totalrow .tot { font-size: var(--text-total); font-weight: var(--weight-strong); line-height: var(--leading-tight); }
+.foot .k-primary { width: 100%; }
+
+/* checkout */
+.co-order { width: 440px; flex: none; background: var(--color-surface); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; min-height: 0; }
+.co-order h2 { font-size: var(--text-item); margin: 0; padding: var(--space-5) var(--space-5) var(--space-3); }
+.co-order .line { grid-template-columns: 1fr auto; }
+.co-pay { flex: 1; display: flex; flex-direction: column; padding: var(--space-6); gap: var(--space-5); min-width: 0; position: relative; }
+.amount-label { font-size: var(--text-item); color: var(--color-text-muted); }
+.amount { font-size: var(--text-display); font-weight: var(--weight-strong); line-height: var(--leading-tight); }
+.tapzone {
+  flex: 1; border: 3px dashed var(--color-text); border-radius: var(--radius-card); background: var(--color-surface);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-6);
+  cursor: pointer; text-align: left; font: inherit; color: var(--color-text);
+}
+.tapzone .big { font-size: var(--text-heading); font-weight: var(--weight-strong); line-height: var(--leading-tight); }
+.tapzone .small { color: var(--color-text-muted); margin-top: var(--space-3); }
+.tapzone .mock { font-size: 14px; color: var(--color-accent); margin-top: var(--space-4); }
+.tapzone .arrow { animation: nudge 1.6s ease-in-out infinite; flex: none; }
+@keyframes nudge { 0%,100% { transform: translateX(0); } 50% { transform: translateX(12px); } }
+@media (prefers-reduced-motion: reduce) { .tapzone .arrow { animation: none; } }
+.pay-actions { display: flex; gap: var(--space-4); justify-content: space-between; align-items: center; }
+.pay-actions .k-primary { min-width: 320px; }
+
+.numpad-wrap { flex: 1; display: flex; gap: var(--space-6); min-height: 0; }
+.numpad-left { flex: 1; display: flex; flex-direction: column; gap: var(--space-4); }
+.cardfield { background: var(--color-surface); border: 2px solid var(--color-accent); border-radius: var(--radius-control); padding: var(--space-4) var(--space-5); font-size: var(--text-heading); font-weight: var(--weight-strong); letter-spacing: 2px; min-height: var(--target-primary); }
+.cardfield .ph { color: var(--color-text-muted); font-weight: var(--weight-regular); letter-spacing: 0; font-size: var(--text-item); }
+.numpad { display: grid; grid-template-columns: repeat(3, var(--target-numpad)); grid-auto-rows: var(--target-numpad); gap: var(--space-3); align-content: start; }
+.numpad button { font-size: var(--text-heading); padding: 0 !important; background: var(--color-surface); color: var(--color-text); border: 2px solid var(--color-border) !important; }
+.numpad button.del { font-size: var(--text-body); }
+
+.state { flex: 1; border-radius: var(--radius-card); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); border: 3px solid; }
+.state.warn { background: var(--color-warning-surface); border-color: var(--color-warning); }
+.state.err { background: var(--color-error-surface); border-color: var(--color-error); }
+.state.neutral { background: var(--color-surface); border-color: var(--color-border); }
+.state .head { display: flex; align-items: center; gap: var(--space-4); }
+.state.warn .head svg { color: var(--color-warning); }
+.state.err .head svg { color: var(--color-error); }
+.state h3 { font-size: var(--text-heading); margin: 0; line-height: var(--leading-tight); }
+.state .grow { flex: 1; }
+.state .code { font-size: var(--text-display); font-weight: var(--weight-strong); letter-spacing: 4px; }
+.state .actions { display: flex; gap: var(--space-4); justify-content: flex-end; }
+.state .actions .k-primary { min-width: 300px; }
+.cmp { width: 100%; border-collapse: collapse; }
+.cmp td, .cmp th { padding: var(--space-2) 0; text-align: left; border-bottom: 1px solid rgba(0,0,0,.12); }
+.cmp th { font-size: var(--text-label); color: var(--color-text-muted); font-weight: var(--weight-regular); }
+.cmp td.r, .cmp th.r { text-align: right; }
+.cmp .old { text-decoration: line-through; color: var(--color-text-muted); }
+.totals-cmp { display: flex; gap: var(--space-6); align-items: baseline; }
+.totals-cmp .was { color: var(--color-text-muted); }
+.totals-cmp .was .v { text-decoration: line-through; font-size: var(--text-item); }
+.totals-cmp .now .v { font-size: var(--text-total); font-weight: var(--weight-strong); }
+
+.spinner { width: 56px; height: 56px; border-radius: 50%; border: 6px solid rgba(0,0,0,.12); border-top-color: currentColor; animation: spin 1s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* done */
+.done { align-items: center; justify-content: center; text-align: center; gap: var(--space-5); }
+.done .ok { color: var(--color-success); }
+.done h1 { font-size: var(--text-heading); margin: 0; }
+.done .ordno { font-size: 96px; font-weight: var(--weight-strong); line-height: 1; }
+.done .sub { font-size: var(--text-item); color: var(--color-text-muted); }
+
+/* overlays */
+.scrim { position: absolute; inset: 0; background: rgba(20,22,26,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 10; animation: fade var(--duration-state) var(--ease-standard); }
+.scrim.center { align-items: center; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.sheet { background: var(--color-surface); width: 760px; max-height: 80%; border-radius: var(--radius-card) var(--radius-card) 0 0; padding: var(--space-5) var(--space-6) var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); animation: up var(--duration-state) var(--ease-standard); }
+@keyframes up { from { transform: translateY(40px); } to { transform: none; } }
+.sheet .top { display: flex; justify-content: space-between; align-items: start; }
+.sheet h2 { font-size: var(--text-heading); margin: 0; line-height: var(--leading-tight); }
+.group .gl { font-weight: var(--weight-strong); margin-bottom: var(--space-2); }
+.choices { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.choice { flex: 1; min-width: 160px; justify-content: space-between !important; background: var(--color-surface); color: var(--color-text); border: 2px solid var(--color-border) !important; font-weight: var(--weight-regular) !important; }
+.choice[aria-pressed="true"] { border-color: var(--color-accent) !important; box-shadow: inset 0 0 0 2px var(--color-accent); font-weight: var(--weight-strong) !important; }
+.sheet .bottom { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
+.sheet .bottom .k-primary { min-width: 340px; }
+.dialog { background: var(--color-surface); width: 640px; border-radius: var(--radius-card); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); animation: up var(--duration-state) var(--ease-standard); }
+.dialog h2 { font-size: var(--text-heading); margin: 0; }
+.dialog .actions { display: flex; gap: var(--space-4); justify-content: flex-end; }
+.dialog .count { font-size: var(--text-display); font-weight: var(--weight-strong); }
+.dialog ol { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* ---------- portrait ---------- */
+#stage.portrait .body { flex-direction: column; }
+#stage.portrait .grid { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); }
+#stage.portrait .panel { width: auto; border-left: 0; border-top: 1px solid var(--color-border); max-height: 60%; }
+#stage.portrait .panel:not(.open) .lines,
+#stage.portrait .panel:not(.open) h2 { display: none; }
+#stage:not(.portrait) .dock-toggle { display: none; }
+#stage.portrait .co-body { flex-direction: column-reverse; }
+#stage.portrait .co-order { width: auto; border-right: 0; border-top: 1px solid var(--color-border); max-height: 34%; }
+#stage.portrait .co-pay { padding: var(--space-5); }
+#stage.portrait .numpad-wrap { flex-direction: column; gap: var(--space-4); }
+#stage.portrait .sheet, #stage.portrait .dialog { width: 100%; }
+#stage.portrait .dialog { width: 92%; }
+#stage.portrait .start .cta { font-size: 64px; }
+</style>
+</head>
+<body>
+<div id="viewport"><div id="frame"><div id="stage" aria-live="polite"></div></div></div>
+
+<aside id="dev" aria-label="Mock controls">
+  <h2>Mock controls</h2>
+  <p class="hint">Not part of the kiosk. Use these to force each recovery screen and to speed up the timers.</p>
+  <fieldset>
+    <legend>Screen</legend>
+    <label><input type="radio" name="orient" value="landscape" checked> Landscape 1280×800</label>
+    <label><input type="radio" name="orient" value="portrait"> Portrait 800×1280</label>
+  </fieldset>
+  <fieldset>
+    <legend>Next payment result</legend>
+    <select id="dev-outcome">
+      <option value="approved">Approved</option>
+      <option value="declined">Declined</option>
+      <option value="unknown-approved">No response, then approved</option>
+      <option value="unknown-declined">No response, then declined</option>
+      <option value="unresolved">No response, never resolves</option>
+    </select>
+  </fieldset>
+  <fieldset>
+    <legend>Server conditions</legend>
+    <label><input type="checkbox" id="dev-api"> API down (payment blocked)</label>
+    <label><input type="checkbox" id="dev-price"> Price changes at review</label>
+    <label><input type="checkbox" id="dev-menu"> Menu never loaded</label>
+  </fieldset>
+  <fieldset>
+    <legend>Timers</legend>
+    <select id="dev-speed">
+      <option value="1">Real (idle 60s / 90s)</option>
+      <option value="10">10× faster</option>
+    </select>
+  </fieldset>
+  <button id="dev-tap">Tap card on reader</button>
+  <button id="dev-reset">Reset kiosk</button>
+  <fieldset style="margin-top:12px">
+    <legend>State</legend>
+    <div class="readout" id="dev-readout"></div>
+  </fieldset>
+</aside>
+
+<script>
+const TIMEOUTS = {
+  idleOrderMs: 60_000,
+  idleCheckoutMs: 90_000,
+  stillThereCountdownMs: 15_000,
+  doneResetMs: 12_000,
+  paymentCheckLimitMs: 30_000,
+  unresolvedResetMs: 60_000,
+  processingMs: 1_500,
+  checkResolveMs: 4_000,
+};
+const PER_PAGE = 6;
+const QTY_MAX = 10;
+const CARD_DIGITS = 16;
+
+const CATEGORIES = [
+  { id: 'snacks', label: 'Snacks' },
+  { id: 'drinks', label: 'Drinks' },
+  { id: 'hot', label: 'Hot food' },
+  { id: 'sweets', label: 'Sweets' },
+];
+const size = (extra) => ({ name: 'Size', choices: [{ label: 'Regular', delta: 0 }, { label: 'Large', delta: extra }] });
+const MENU = [
+  { id: 'chips', cat: 'snacks', name: 'Salted chips', price: 250 },
+  { id: 'pretzels', cat: 'snacks', name: 'Pretzels', price: 300 },
+  { id: 'popcorn', cat: 'snacks', name: 'Popcorn', price: 400, options: [size(150)] },
+  { id: 'trail', cat: 'snacks', name: 'Trail mix', price: 350 },
+  { id: 'nachos', cat: 'snacks', name: 'Nachos with cheese', price: 650, options: [{ name: 'Jalapeños', choices: [{ label: 'None', delta: 0 }, { label: 'Add jalapeños', delta: 50 }] }] },
+  { id: 'peanuts', cat: 'snacks', name: 'Roasted peanuts', price: 200, soldOut: true },
+  { id: 'jerky', cat: 'snacks', name: 'Beef jerky', price: 550 },
+  { id: 'water', cat: 'drinks', name: 'Still water', price: 200 },
+  { id: 'soda', cat: 'drinks', name: 'Soda', price: 300, options: [{ name: 'Flavor', choices: [{ label: 'Cola', delta: 0 }, { label: 'Lemon-lime', delta: 0 }, { label: 'Orange', delta: 0 }] }] },
+  { id: 'tea', cat: 'drinks', name: 'Iced tea', price: 350 },
+  { id: 'coffee', cat: 'drinks', name: 'Coffee', price: 300, options: [size(100), { name: 'Milk', choices: [{ label: 'None', delta: 0 }, { label: 'Dairy', delta: 0 }, { label: 'Oat', delta: 50 }] }] },
+  { id: 'oj', cat: 'drinks', name: 'Orange juice', price: 400 },
+  { id: 'sparkling', cat: 'drinks', name: 'Sparkling water', price: 250 },
+  { id: 'hotdog', cat: 'hot', name: 'Hot dog', price: 550, options: [{ name: 'Toppings', choices: [{ label: 'Plain', delta: 0 }, { label: 'Onions', delta: 0 }, { label: 'Chili', delta: 100 }] }] },
+  { id: 'bites', cat: 'hot', name: 'Pretzel bites', price: 600 },
+  { id: 'grilled', cat: 'hot', name: 'Grilled cheese', price: 700 },
+  { id: 'taco', cat: 'hot', name: 'Soft taco', price: 450 },
+  { id: 'cookie', cat: 'sweets', name: 'Chocolate chip cookie', price: 250 },
+  { id: 'brownie', cat: 'sweets', name: 'Brownie', price: 350 },
+  { id: 'candy', cat: 'sweets', name: 'Candy bar', price: 200 },
+  { id: 'icecream', cat: 'sweets', name: 'Ice cream cup', price: 400, options: [{ name: 'Flavor', choices: [{ label: 'Vanilla', delta: 0 }, { label: 'Chocolate', delta: 0 }] }] },
+];
+const byId = Object.fromEntries(MENU.map((m) => [m.id, m]));
+
+const ICON = {
+  warn: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 10v5M12 18v.5" stroke-linecap="round"/></svg>',
+  err: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="m8.5 8.5 7 7M15.5 8.5l-7 7"/></svg>',
+  ok: '<svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>',
+  stripWarn: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 10v5M12 18v.5" stroke-linecap="round"/></svg>',
+  arrow: '<svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>',
+  trash: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-label="Remove"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  glyph: {
+    snacks: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12l-2 18H8L6 3Z"/></svg>',
+    drinks: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h10l-1.5 18h-7L7 3ZM6 8h12"/></svg>',
+    hot: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="7" rx="3.5"/></svg>',
+    sweets: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="14" r="1"/></svg>',
+  },
+};
+
+const money = (c) => '$' + (c / 100).toFixed(2);
+const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+const dev = { outcome: 'approved', apiDown: false, priceChange: false, menuFails: false, speed: 1, portrait: false };
+const priceBump = {};
+
+let S;
+function fresh() {
+  return {
+    screen: 'start',
+    cat: 'snacks', page: 0,
+    lines: [],
+    sheet: null,
+    help: false,
+    confirmStartOver: false,
+    stillThere: null,
+    dock: false,
+    pay: { mode: 'tap', digits: '', phase: 'idle', changed: null },
+    orderNo: null, code: null,
+    doneAt: 0, unresolvedAt: 0,
+    lastAdded: null,
+    bumpApplied: false,
+  };
+}
+S = fresh();
+let lastActivity = Date.now();
+let timers = [];
+function later(ms, fn) { timers.push(setTimeout(fn, ms / dev.speed)); }
+function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+function unitPrice(item, sel) {
+  let p = item.price + (priceBump[item.id] || 0);
+  (item.options || []).forEach((g, gi) => { p += g.choices[sel[gi] ?? 0].delta; });
+  return p;
+}
+function optionLabel(item, sel) {
+  return (item.options || []).map((g, gi) => g.choices[sel[gi] ?? 0].label).filter((l) => l !== 'None' && l !== 'Regular' && l !== 'Plain').join(', ');
+}
+const lineKey = (id, sel) => id + ':' + sel.join('.');
+const count = () => S.lines.reduce((n, l) => n + l.qty, 0);
+const total = () => S.lines.reduce((n, l) => n + l.qty * l.unit, 0);
+const qtyOf = (id) => S.lines.filter((l) => l.itemId === id).reduce((n, l) => n + l.qty, 0);
+
+function addLine(item, sel, qty) {
+  const key = lineKey(item.id, sel);
+  const found = S.lines.find((l) => l.key === key);
+  if (found) found.qty = Math.min(QTY_MAX, found.qty + qty);
+  else S.lines.push({ key, itemId: item.id, sel, qty, unit: unitPrice(item, sel), opt: optionLabel(item, sel) });
+  S.lastAdded = key;
+}
+
+const inPayment = () => ['processing', 'checking', 'unresolved'].includes(S.pay.phase);
+
+function reset() {
+  clearTimers();
+  Object.keys(priceBump).forEach((k) => delete priceBump[k]);
+  S = fresh();
+  render();
+}
+
+function goCheckout() {
+  if (!S.lines.length) return;
+  S.screen = 'checkout';
+  S.pay = { mode: 'tap', digits: '', phase: 'idle', changed: null };
+  if (dev.priceChange && !S.bumpApplied) {
+    priceBump[S.lines[0].itemId] = (priceBump[S.lines[0].itemId] || 0) + 50;
+    S.bumpApplied = true;
+  }
+  const changed = S.lines.filter((l) => unitPrice(byId[l.itemId], l.sel) !== l.unit);
+  if (changed.length) {
+    S.pay.phase = 'totalChanged';
+    S.pay.changed = {
+      oldTotal: total(),
+      newTotal: S.lines.reduce((n, l) => n + l.qty * unitPrice(byId[l.itemId], l.sel), 0),
+      rows: changed.map((l) => ({ name: byId[l.itemId].name, opt: l.opt, qty: l.qty, was: l.unit, now: unitPrice(byId[l.itemId], l.sel) })),
+    };
+  }
+}
+
+function pay() {
+  if (dev.apiDown || S.screen !== 'checkout' || S.pay.phase !== 'idle') return;
+  if (S.pay.mode === 'numpad' && S.pay.digits.length < CARD_DIGITS) return;
+  S.pay.phase = 'processing';
+  render();
+  const outcome = dev.outcome;
+  later(TIMEOUTS.processingMs, () => {
+    if (outcome === 'approved') return finish();
+    if (outcome === 'declined') { S.pay.phase = 'declined'; return render(); }
+    S.pay.phase = 'checking';
+    render();
+    if (outcome === 'unresolved') {
+      later(TIMEOUTS.paymentCheckLimitMs, () => {
+        S.pay.phase = 'unresolved';
+        S.code = 'K' + Math.floor(1000 + Math.random() * 9000);
+        S.unresolvedAt = Date.now();
+        render();
+        later(TIMEOUTS.unresolvedResetMs, reset);
+      });
+    } else {
+      later(TIMEOUTS.checkResolveMs, () => {
+        if (outcome === 'unknown-approved') return finish();
+        S.pay.phase = 'declined';
+        render();
+      });
+    }
+  });
+}
+function finish() {
+  S.screen = 'done';
+  S.orderNo = 'A' + Math.floor(10 + Math.random() * 90);
+  S.doneAt = Date.now();
+  render();
+  later(TIMEOUTS.doneResetMs, reset);
+}
+
+/* ---------- actions ---------- */
+const actions = {
+  start() { if (!dev.menuFails) { S.screen = 'order'; render(); } },
+  tab(id) { S.cat = id; S.page = 0; render(); },
+  page(d) { S.page += Number(d); render(); },
+  tile(id) {
+    const item = byId[id];
+    if (item.soldOut) return;
+    if (item.options) { S.sheet = { itemId: id, sel: item.options.map(() => 0), qty: 1 }; render(); return; }
+    addLine(item, [], 1);
+    render();
+  },
+  choose(arg) { const [gi, ci] = arg.split(':').map(Number); S.sheet.sel[gi] = ci; render(); },
+  sheetQty(d) { S.sheet.qty = Math.max(1, Math.min(QTY_MAX, S.sheet.qty + Number(d))); render(); },
+  sheetAdd() { addLine(byId[S.sheet.itemId], S.sheet.sel, S.sheet.qty); S.sheet = null; render(); },
+  sheetClose() { S.sheet = null; render(); },
+  inc(key) { const l = S.lines.find((x) => x.key === key); if (l && l.qty < QTY_MAX) l.qty++; S.lastAdded = null; render(); },
+  dec(key) {
+    const l = S.lines.find((x) => x.key === key);
+    if (!l) return;
+    if (l.qty > 1) l.qty--; else S.lines = S.lines.filter((x) => x !== l);
+    S.lastAdded = null;
+    render();
+  },
+  dock() { S.dock = !S.dock; render(); },
+  review() { goCheckout(); render(); },
+  editOrder() { S.screen = 'order'; S.pay.phase = 'idle'; render(); },
+  acceptPrice() {
+    S.lines.forEach((l) => { l.unit = unitPrice(byId[l.itemId], l.sel); });
+    S.pay.phase = 'idle'; S.pay.changed = null; render();
+  },
+  mode(m) { S.pay.mode = m; S.pay.digits = ''; render(); },
+  key(k) { if (S.pay.digits.length < CARD_DIGITS) S.pay.digits += k; render(); },
+  del() { S.pay.digits = S.pay.digits.slice(0, -1); render(); },
+  tap() { if (S.pay.mode === 'tap') pay(); },
+  pay() { pay(); },
+  retry() { S.pay = { mode: 'tap', digits: '', phase: 'idle', changed: null }; render(); },
+  help() { S.help = true; render(); },
+  helpClose() { S.help = false; render(); },
+  startOver() { if (!S.lines.length) return reset(); S.confirmStartOver = true; render(); },
+  startOverYes() { reset(); },
+  startOverNo() { S.confirmStartOver = false; render(); },
+  keepOrdering() { S.stillThere = null; render(); },
+  stillThereStartOver() { reset(); },
+  done() { reset(); },
+};
+
+/* ---------- views ---------- */
+function header(title) {
+  const canLeave = !inPayment();
+  return `<header class="hdr">
+    <div class="slot">${canLeave ? '<button class="k k-quiet" data-a="startOver">Start over</button>' : ''}</div>
+    <div class="title">${esc(title)}</div>
+    <div class="slot r"><button class="k k-quiet" data-a="help">Help</button></div>
+  </header>${dev.apiDown ? `<div class="strip" role="status">${ICON.stripWarn}<span>Payment is unavailable right now. You can still browse.</span></div>` : ''}`;
+}
+
+function viewStart() {
+  if (dev.menuFails) {
+    return `<div class="screen start" role="status">
+      <div class="brand">Snack Bar</div>
+      <div class="unavailable"><div class="cta" style="font-size:var(--text-heading)">Ordering is unavailable right now</div>
+      <p class="sub">We are trying to reconnect. Please check back in a minute.</p></div>
+    </div>`;
+  }
+  return `<div class="screen start" data-a="start">
+    <div class="brand">Snack Bar</div>
+    <div class="cta">Tap anywhere<br>to start</div>
+    <div class="sub">Order and pay here. Pick up at the counter.</div>
+  </div>`;
+}
+
+function viewLines(editable) {
+  if (!S.lines.length) return '<div class="empty">Tap an item to add it.</div>';
+  return S.lines.map((l) => {
+    const item = byId[l.itemId];
+    const step = editable ? `<div class="stepper">
+        <button class="k k-quiet" data-a="dec" data-v="${l.key}" aria-label="${l.qty === 1 ? 'Remove' : 'Remove one'} ${esc(item.name)}">${l.qty === 1 ? ICON.trash : '<span aria-hidden="true">−</span>'}</button>
+        <span class="q num">${l.qty}</span>
+        <button class="k k-quiet" data-a="inc" data-v="${l.key}" aria-label="Add one ${esc(item.name)}" ${l.qty >= QTY_MAX ? 'disabled' : ''}>+</button>
+      </div>` : '';
+    return `<div class="line ${editable && S.lastAdded === l.key ? 'added' : ''}">
+      <div><div class="ln">${editable ? '' : l.qty + ' × '}${esc(item.name)}</div>${l.opt ? `<div class="lo">${esc(l.opt)}</div>` : ''}</div>
+      <div class="lp num">${money(l.qty * l.unit)}</div>
+      ${step}
+    </div>`;
+  }).join('');
+}
+
+function viewOrder() {
+  const items = MENU.filter((m) => m.cat === S.cat);
+  const pages = Math.max(1, Math.ceil(items.length / PER_PAGE));
+  S.page = Math.min(S.page, pages - 1);
+  const pageItems = items.slice(S.page * PER_PAGE, S.page * PER_PAGE + PER_PAGE);
+  const tiles = pageItems.map((m) => {
+    const q = qtyOf(m.id);
+    if (m.soldOut) {
+      return `<button class="tile soldout" disabled aria-disabled="true">
+        <div class="glyph">${ICON.glyph[m.cat]}</div>
+        <div class="name">${esc(m.name)}</div>
+        <div class="meta"><span class="tag">Sold out</span><span class="price num">${money(m.price)}</span></div>
+      </button>`;
+    }
+    return `<button class="tile ${S.lastAdded && S.lastAdded.startsWith(m.id + ':') ? 'flash' : ''}" data-a="tile" data-v="${m.id}" aria-label="${esc(m.name)}, ${money(m.price)}${m.options ? ', has options' : ''}">
+      ${q ? `<span class="badge num" aria-label="${q} in order">${q}</span>` : ''}
+      <div class="glyph">${ICON.glyph[m.cat]}</div>
+      <div class="name">${esc(m.name)}</div>
+      <div class="meta"><span class="opt">${m.options ? 'Choose options' : 'Tap to add'}</span><span class="price num">${money(m.price + (priceBump[m.id] || 0))}</span></div>
+    </button>`;
+  }).join('');
+  const filler = Array.from({ length: PER_PAGE - pageItems.length }, () => '<div></div>').join('');
+  const n = count();
+  return `<div class="screen">
+    ${header('Snack Bar')}
+    <div class="body">
+      <section class="menu" aria-label="Menu">
+        <div class="tabs" role="tablist">${CATEGORIES.map((c) => `<button class="k tab" role="tab" aria-selected="${c.id === S.cat}" data-a="tab" data-v="${c.id}">${c.label}</button>`).join('')}</div>
+        <div class="grid">${tiles}${filler}</div>
+        <div class="pager">
+          ${pages > 1 ? `<button class="k k-secondary" data-a="page" data-v="-1" ${S.page === 0 ? 'disabled' : ''}>Previous</button>
+          <span class="where num">Page ${S.page + 1} of ${pages}</span>
+          <button class="k k-secondary" data-a="page" data-v="1" ${S.page >= pages - 1 ? 'disabled' : ''}>More ${esc(CATEGORIES.find((c) => c.id === S.cat).label.toLowerCase())}</button>` : '<span></span>'}
+        </div>
+      </section>
+      <aside class="panel ${S.dock ? 'open' : ''}" aria-label="Your order">
+        <h2>Your order</h2>
+        <div class="lines">${viewLines(true)}</div>
+        <div class="foot">
+          <div class="totalrow">
+            <button class="k k-quiet dock-toggle" data-a="dock">${S.dock ? 'Hide order' : `View order (${n})`}</button>
+            <span class="cnt num">${n} item${n === 1 ? '' : 's'}</span>
+            <span class="tot num" aria-label="Total ${money(total())}">${money(total())}</span>
+          </div>
+          <button class="k k-primary" data-a="review" ${n ? '' : 'disabled'}>Review and pay</button>
+        </div>
+      </aside>
+    </div>
+  </div>`;
+}
+
+function viewPayArea() {
+  const p = S.pay;
+  const t = total();
+  if (p.phase === 'totalChanged') {
+    const c = p.changed;
+    return `<div class="state warn" role="alert">
+      <div class="head">${ICON.warn}<h3>Prices updated</h3></div>
+      <p style="margin:0">Some prices changed since you started. Check the new total before you pay.</p>
+      <table class="cmp"><thead><tr><th>Item</th><th class="r">Was</th><th class="r">Now</th></tr></thead><tbody>
+        ${c.rows.map((r) => `<tr><td>${r.qty} × ${esc(r.name)}${r.opt ? ` (${esc(r.opt)})` : ''}</td><td class="r num old">${money(r.was * r.qty)}</td><td class="r num"><strong>${money(r.now * r.qty)}</strong></td></tr>`).join('')}
+      </tbody></table>
+      <div class="totals-cmp"><div class="was">Old total <span class="v num">${money(c.oldTotal)}</span></div><div class="now">New total <span class="v num">${money(c.newTotal)}</span></div></div>
+      <div class="grow"></div>
+      <div class="actions"><button class="k k-secondary" data-a="editOrder">Back to order</button><button class="k k-primary" data-a="acceptPrice">Pay ${money(c.newTotal)}</button></div>
+    </div>`;
+  }
+  if (p.phase === 'processing') {
+    return `<div class="state neutral" role="status">
+      <div class="head"><div class="spinner"></div><h3>Processing payment…</h3></div>
+      <p style="margin:0">Keep your card on the reader until this screen changes.</p>
+      <div class="amount num">${money(t)}</div>
+    </div>`;
+  }
+  if (p.phase === 'checking') {
+    return `<div class="state warn" role="alert">
+      <div class="head"><div class="spinner" style="color:var(--color-warning)"></div><h3>Checking your payment</h3></div>
+      <p style="margin:0;font-size:var(--text-item);font-weight:var(--weight-strong)">Please don't pay again.</p>
+      <p style="margin:0">We're confirming with the bank. This can take up to 30 seconds.</p>
+    </div>`;
+  }
+  if (p.phase === 'unresolved') {
+    return `<div class="state warn" role="alert">
+      <div class="head">${ICON.warn}<h3>We couldn't confirm your payment</h3></div>
+      <p style="margin:0">You have not been asked to pay twice. If your card was charged, show this code at the counter and we'll sort it out.</p>
+      <div class="code num">${S.code}</div>
+      <div class="grow"></div>
+      <p style="margin:0;color:var(--color-text-muted)" data-countdown="unresolved"></p>
+      <div class="actions"><button class="k k-primary" data-a="done">Start a new order</button></div>
+    </div>`;
+  }
+  if (p.phase === 'declined') {
+    return `<div class="state err" role="alert">
+      <div class="head">${ICON.err}<h3>Card not accepted</h3></div>
+      <p style="margin:0">You have not been charged. Your order is saved. Try another card or phone.</p>
+      <div class="grow"></div>
+      <div class="actions"><button class="k k-secondary" data-a="editOrder">Back to order</button><button class="k k-primary" data-a="retry">Try another card</button></div>
+    </div>`;
+  }
+  if (dev.apiDown) {
+    return `<div><div class="amount-label">Amount to pay</div><div class="amount num">${money(t)}</div></div>
+      <div class="state neutral">
+        <div class="head">${ICON.warn.replace('currentColor', 'var(--color-warning)')}<h3>Payment is unavailable right now</h3></div>
+        <p style="margin:0">Your order is saved. Payment will come back on its own. You can keep this screen open or edit your order.</p>
+      </div>
+      <div class="pay-actions"><span></span><button class="k k-primary" disabled>Payment unavailable</button></div>`;
+  }
+  if (p.mode === 'numpad') {
+    const d = p.digits;
+    const grouped = d.replace(/(.{4})/g, '$1 ').trim();
+    return `<div><div class="amount-label">Amount to pay</div><div class="amount num">${money(t)}</div></div>
+      <div class="numpad-wrap">
+        <div class="numpad-left">
+          <div class="cardfield num" aria-label="Card number">${d ? esc(grouped) : '<span class="ph">Card number, 16 digits</span>'}</div>
+          <p style="margin:0;color:var(--color-text-muted)">${CARD_DIGITS - d.length ? `${CARD_DIGITS - d.length} digits to go` : 'Ready to pay'}</p>
+        </div>
+        <div class="numpad">
+          ${[1,2,3,4,5,6,7,8,9].map((k) => `<button class="k num" data-a="key" data-v="${k}">${k}</button>`).join('')}
+          <span></span><button class="k num" data-a="key" data-v="0">0</button><button class="k del" data-a="del" aria-label="Delete last digit">Delete</button>
+        </div>
+      </div>
+      <div class="pay-actions"><button class="k k-secondary" data-a="mode" data-v="tap">Tap card instead</button><button class="k k-primary" data-a="pay" ${d.length === CARD_DIGITS ? '' : 'disabled'}>Pay ${money(t)}</button></div>`;
+  }
+  return `<div><div class="amount-label">Amount to pay</div><div class="amount num">${money(t)}</div></div>
+    <button class="tapzone" data-a="tap">
+      <div><div class="big">Tap your card or phone<br>on the reader</div>
+      <div class="small">The reader is to the right of this screen.</div>
+      <div class="mock">Mock: tap here to simulate the reader.</div></div>
+      <span class="arrow">${ICON.arrow}</span>
+    </button>
+    <div class="pay-actions"><button class="k k-secondary" data-a="mode" data-v="numpad">Enter card number instead</button><span></span></div>`;
+}
+
+function viewCheckout() {
+  const locked = inPayment();
+  return `<div class="screen">
+    ${header('Review and pay')}
+    <div class="body co-body">
+      <section class="co-order" aria-label="Your order">
+        <h2>Your order</h2>
+        <div class="lines">${viewLines(false)}</div>
+        <div class="foot">
+          <div class="totalrow"><span class="cnt num">${count()} items</span><span class="tot num">${money(total())}</span></div>
+          ${locked ? '' : '<button class="k k-secondary" data-a="editOrder">Edit order</button>'}
+        </div>
+      </section>
+      <section class="co-pay" aria-label="Payment">${viewPayArea()}</section>
+    </div>
+  </div>`;
+}
+
+function viewDone() {
+  return `<div class="screen done" role="status">
+    <div class="ok">${ICON.ok}</div>
+    <h1>Paid. Thank you!</h1>
+    <div><div class="sub">Your order number</div><div class="ordno num">${S.orderNo}</div></div>
+    <div class="sub">Pick it up at the counter when your number is called.</div>
+    <button class="k k-primary" data-a="done" style="min-width:280px">Done</button>
+    <div class="sub" style="font-size:var(--text-body)" data-countdown="done"></div>
+  </div>`;
+}
+
+function viewOverlays() {
+  let out = '';
+  if (S.sheet) {
+    const item = byId[S.sheet.itemId];
+    const price = unitPrice(item, S.sheet.sel) * S.sheet.qty;
+    out += `<div class="scrim" data-a="sheetClose"><div class="sheet" data-stop role="dialog" aria-label="${esc(item.name)}">
+      <div class="top"><div><h2>${esc(item.name)}</h2><div class="num" style="color:var(--color-text-muted)">From ${money(item.price + (priceBump[item.id] || 0))}</div></div>
+        <button class="k k-quiet" data-a="sheetClose">Cancel</button></div>
+      ${item.options.map((g, gi) => `<div class="group"><div class="gl">${esc(g.name)}</div><div class="choices">
+        ${g.choices.map((c, ci) => `<button class="k choice" aria-pressed="${S.sheet.sel[gi] === ci}" data-a="choose" data-v="${gi}:${ci}"><span>${esc(c.label)}</span><span class="num">${c.delta ? '+' + money(c.delta) : ''}</span></button>`).join('')}
+      </div></div>`).join('')}
+      <div class="bottom">
+        <div class="stepper" style="grid-column:auto">
+          <button class="k k-quiet" data-a="sheetQty" data-v="-1" ${S.sheet.qty <= 1 ? 'disabled' : ''} aria-label="One less">−</button>
+          <span class="q num">${S.sheet.qty}</span>
+          <button class="k k-quiet" data-a="sheetQty" data-v="1" ${S.sheet.qty >= QTY_MAX ? 'disabled' : ''} aria-label="One more">+</button>
+        </div>
+        <button class="k k-primary" data-a="sheetAdd">Add · <span class="num">${money(price)}</span></button>
+      </div>
+    </div></div>`;
+  }
+  if (S.help) {
+    out += `<div class="scrim center" data-a="helpClose"><div class="dialog" data-stop role="dialog" aria-label="Help">
+      <h2>How this works</h2>
+      <ol>
+        <li><strong>Order:</strong> tap items to add them. Your order and total stay on the right.</li>
+        <li><strong>Pay:</strong> tap your card or phone on the reader, or type your card number.</li>
+        <li><strong>If a payment fails:</strong> you're never charged twice. The screen tells you what to do next.</li>
+      </ol>
+      <div class="actions"><button class="k k-primary" data-a="helpClose">Got it</button></div>
+    </div></div>`;
+  }
+  if (S.confirmStartOver) {
+    out += `<div class="scrim center"><div class="dialog" role="alertdialog" aria-label="Start over">
+      <h2>Start over?</h2><p style="margin:0">Your order will be cleared.</p>
+      <div class="actions"><button class="k k-secondary" data-a="startOverYes">Start over</button><button class="k k-primary" data-a="startOverNo">Keep ordering</button></div>
+    </div></div>`;
+  }
+  if (S.stillThere) {
+    out += `<div class="scrim center" data-a="keepOrdering"><div class="dialog" role="alertdialog" aria-label="Are you still there?">
+      <h2>Still there?</h2>
+      <p style="margin:0">Your order will be cleared in</p>
+      <div class="count num" data-countdown="still"></div>
+      <div class="actions"><button class="k k-secondary" data-a="stillThereStartOver">Start over</button><button class="k k-primary" data-a="keepOrdering">Keep ordering</button></div>
+    </div></div>`;
+  }
+  return out;
+}
+
+const stage = document.getElementById('stage');
+let lastView = '';
+function render() {
+  const view = S.screen + ':' + S.pay.phase;
+  if (view !== lastView) { lastView = view; lastActivity = Date.now(); }
+  const v = { start: viewStart, order: viewOrder, checkout: viewCheckout, done: viewDone }[S.screen]();
+  stage.innerHTML = v + viewOverlays();
+  S.lastAdded = null;
+  tickCountdowns();
+  readout();
+}
+
+stage.addEventListener('pointerdown', () => { lastActivity = Date.now(); }, true);
+stage.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-a]');
+  if (!el) return;
+  const stop = e.target.closest('[data-stop]');
+  if (stop && !stop.contains(el)) return;
+  if (stop && el.classList.contains('scrim')) return;
+  if (el.disabled) return;
+  const fn = actions[el.dataset.a];
+  if (fn) fn(el.dataset.v);
+});
+
+/* idle + countdowns */
+function idleLimit() {
+  if (S.screen === 'order') return TIMEOUTS.idleOrderMs;
+  if (S.screen === 'checkout' && !inPayment()) return TIMEOUTS.idleCheckoutMs;
+  return null;
+}
+function tickCountdowns() {
+  const now = Date.now();
+  const set = (k, txt) => { const el = stage.querySelector(`[data-countdown="${k}"]`); if (el) el.textContent = txt; };
+  if (S.stillThere) set('still', Math.max(0, Math.ceil((S.stillThere.end - now) / 1000)) + 's');
+  if (S.screen === 'done') set('done', `Returning to start in ${Math.max(0, Math.ceil((S.doneAt + TIMEOUTS.doneResetMs / dev.speed - now) / 1000))}s`);
+  if (S.pay.phase === 'unresolved') set('unresolved', `This screen stays for ${Math.max(0, Math.ceil((S.unresolvedAt + TIMEOUTS.unresolvedResetMs / dev.speed - now) / 1000))}s.`);
+}
+setInterval(() => {
+  const now = Date.now();
+  const limit = idleLimit();
+  if (S.stillThere) {
+    if (now >= S.stillThere.end) return reset();
+  } else if (limit && now - lastActivity > limit / dev.speed) {
+    S.sheet = null; S.help = false; S.confirmStartOver = false;
+    S.stillThere = { end: now + TIMEOUTS.stillThereCountdownMs / dev.speed };
+    render();
+  }
+  tickCountdowns();
+  readout();
+}, 250);
+
+/* ---------- harness wiring ---------- */
+function readout() {
+  const idle = idleLimit();
+  document.getElementById('dev-readout').textContent =
+    `screen: ${S.screen}\nphase: ${S.pay.phase}\nitems: ${count()}  total: ${money(total())}` +
+    (idle && !S.stillThere ? `\nidle prompt in: ${Math.max(0, Math.ceil((idle / dev.speed - (Date.now() - lastActivity)) / 1000))}s` : '');
+}
+function fit() {
+  const frame = document.getElementById('frame');
+  const vp = document.getElementById('viewport');
+  const w = dev.portrait ? 800 : 1280, h = dev.portrait ? 1280 : 800;
+  const s = Math.min((vp.clientWidth - 60) / w, (vp.clientHeight - 60) / h, 1);
+  frame.style.transform = `translate(-50%, -50%) scale(${s})`;
+}
+document.querySelectorAll('input[name="orient"]').forEach((r) => r.addEventListener('change', (e) => {
+  dev.portrait = e.target.value === 'portrait';
+  stage.classList.toggle('portrait', dev.portrait);
+  fit();
+}));
+document.getElementById('dev-outcome').addEventListener('change', (e) => { dev.outcome = e.target.value; });
+document.getElementById('dev-api').addEventListener('change', (e) => { dev.apiDown = e.target.checked; render(); });
+document.getElementById('dev-price').addEventListener('change', (e) => { dev.priceChange = e.target.checked; S.bumpApplied = false; });
+document.getElementById('dev-menu').addEventListener('change', (e) => { dev.menuFails = e.target.checked; if (dev.menuFails) reset(); else render(); });
+document.getElementById('dev-speed').addEventListener('change', (e) => { dev.speed = Number(e.target.value); lastActivity = Date.now(); });
+document.getElementById('dev-tap').addEventListener('click', () => { lastActivity = Date.now(); actions.tap(); });
+document.getElementById('dev-reset').addEventListener('click', reset);
+window.addEventListener('resize', fit);
+fit();
+render();
+</script>
+</body>
+</html>
