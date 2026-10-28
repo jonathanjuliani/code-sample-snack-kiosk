@@ -221,6 +221,18 @@ docker compose up --build
 
 No-Docker path: `pnpm install && pnpm dev` was already used for Playwright (API on 3010, Vite on 5180).
 
-No `.env` files with values, no PDF, no secrets in the tree (`.gitignore` covers `*.db`, `.env`, `*.pdf`).
+Fresh clone of this repo (local `git clone` into a temp dir, then follow the README):
+
+```
+pnpm install --frozen-lockfile
+# 104 packages, lockfile up to date
+
+pnpm verify
+# biome check: 53 files, clean
+# typecheck: shared, api, web
+# tests: 12 shared + 17 api + 5 web, all passing
+```
+
+`git ls-files` has no `.env` and no `.pdf`. `.gitignore` covers `*.db`, `.env`, `*.pdf`.
 
 **Gate 8**: not held live. Nothing has been pushed.
