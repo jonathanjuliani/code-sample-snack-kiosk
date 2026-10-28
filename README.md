@@ -34,6 +34,41 @@ Checks:
 pnpm verify   # lint, typecheck, unit and HTTP tests
 ```
 
+## API
+
+Schemas live in [`packages/shared`](packages/shared/src); both apps import them. Money is always integer cents.
+
+| Endpoint                            | Purpose                                                                                                                                                                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                       | Readiness, used by compose.                                                                                                                                                             |
+| `GET /menu`                         | Categories, items (`priceCents`, `available`, `optionGroups`) and `version`. Sends an `ETag`; `If-None-Match` gets `304`.                                                               |
+| `POST /orders`                      | Header `Idempotency-Key: <uuid>`. Body `{ kioskId, menuVersion, lines: [{ itemId, qty, choiceIds }], payment: { method: "card", cardNumber } \| { method: "tap" }, clientTotalCents }`. |
+| `GET /orders?idempotencyKey=<uuid>` | What happened to a checkout attempt (used to resume after a reload).                                                                                                                    |
+| `GET /orders/:id`                   | The state of one order.                                                                                                                                                                 |
+
+What `POST /orders` answers:
+
+| Outcome                                           | Status              | Body                                                                                       |
+| ------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------ |
+| Paid                                              | `201`               | `{ orderId, status: "paid", pickupNumber, totalCents, lines, paymentMethod, last4 }`       |
+| Same key, same request, already finished          | the original status | the original body, with `Idempotent-Replayed: true`                                        |
+| Same key, same request, still paying              | `202`               | `{ orderId, status: "pending_payment" }`                                                   |
+| Same key, different request                       | `422`               | `{ error: "idempotency_key_reused" }`                                                      |
+| Price changed or item unavailable                 | `409`               | `{ error: "order_changed", totalCents, lines, unavailableItemIds, menuVersion }`           |
+| Payment declined                                  | `402`               | `{ orderId, status: "payment_failed", error: "payment_declined", message }` (safe to show) |
+| Invalid body, unknown item or option, missing key | `400`               | `{ error: "invalid_request", issues: [{ path, message }] }`                                |
+
+Test cards (payment is fake and deterministic):
+
+| Card number           | Result                                                       |
+| --------------------- | ------------------------------------------------------------ |
+| `4242 4242 4242 4242` | Approved                                                     |
+| `4000 0000 0000 0002` | Declined                                                     |
+| `4000 0000 0000 9995` | Slow: approves after 15 seconds, longer than the kiosk waits |
+| Tap                   | Approved                                                     |
+
+Any other 16-digit number is approved.
+
 ## What happens when…
 
 These are the requirements I set myself before writing code.
