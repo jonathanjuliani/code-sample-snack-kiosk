@@ -1,0 +1,55 @@
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-label: 18px;
+  --text-body: 20px;
+  --text-item: 24px;
+  --text-heading: 32px;
+  --text-total: 40px;
+  --text-display: 56px;
+  --weight-regular: 500;
+  --weight-strong: 700;
+  --leading-body: 1.35;
+  --leading-tight: 1.1;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 48px;
+
+  --target-min: 56px;
+  --target-primary: 72px;
+  --target-numpad: 80px;
+  --tile-min: 160px;
+
+  --color-bg: #f5f4f0;
+  --color-surface: #ffffff;
+  --color-text: #14161a;
+  --color-text-muted: #4a4f57;
+  --color-action: #14161a;
+  --color-accent: #1d4ed8;
+  --color-success: #1e7a3c;
+  --color-warning: #8a5a00;
+  --color-warning-surface: #fff4d6;
+  --color-error: #b3261e;
+  --color-error-surface: #fdecea;
+  --color-disabled-surface: #e4e3de;
+  --color-disabled-text: #5c6169;
+  --color-border: #d6d4ce;
+
+  --radius-control: 8px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  --duration-press: 120ms;
+  --duration-state: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-press: 0ms;
+    --duration-state: 0ms;
+  }
+}

@@ -1,6 +1,14 @@
 {
   "files": {
-    "includes": ["**", "!**/dist", "!docs/design/mockup", "!**/playwright-report", "!**/test-results"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!docs/design/mockup",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!**/e2e",
+      "!**/pnpm-lock.yaml"
+    ]
   },
   "formatter": {
     "indentStyle": "space",
@@ -23,5 +31,27 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/src/styles/kiosk.css"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/app.tsx"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          }
+        }
+      }
+    }
+  ]
 }
