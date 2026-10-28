@@ -86,3 +86,30 @@ How this went from an empty folder to a finished kiosk, one entry per phase, wri
 **Time**: a few minutes to file it; the research itself was done before this session and isn't counted here.
 
 **Gate 2**: not held live. The direction is the one I designed; nothing in it changed.
+
+## Phase 3: contracts and data model
+
+**Decided before coding**
+
+- The endpoint and status tables from my plan, plus item options (`choiceIds` on each line).
+
+**What the tool was asked for**
+
+- `data-model` and `api-design` for menu, orders, lines and the idempotency record; Zod schemas in `packages/shared`; `record-decision` for the choices that will be questioned.
+
+**Kept**
+
+- Schemas in `packages/shared/src/{money,menu,order}.ts`, every amount `z.number().int().nonnegative()`. A schema test rejects an empty cart, qty 0, qty 999, a fractional qty, a float total and a short card number.
+- `formatCents` formats with integer division, so no float ever touches money, even for display.
+- D4 to D8 in `DECISIONS.md`.
+
+**Thrown away**
+
+- "Write the order and its payment result in one transaction", from my own plan. Writing it down as a decision showed it doesn't work: a transaction can't span the payment call, and if nothing is written until payment returns, a retry that arrives mid-payment finds no order and charges again. The order is now inserted as `pending_payment` first (D5).
+- `GET /orders/:id` as the way to resume after a reload, also from my plan. If the response was lost the kiosk never got the id, and re-sending the `POST` isn't possible because the card number must not sit in `sessionStorage`. Replaced by a lookup by idempotency key (D8).
+- Separate `option_groups` and `option_choices` tables, from the first draft of the data model. They're only read with their item, so they're a JSON column on `menu_items` (D7).
+- Returning only the changed lines in a 409. The server doesn't know what the kiosk displayed; it returns every line re-priced and the kiosk does the diff (D6).
+
+**Time**: about 5 minutes of agent time (23:55 to 23:58).
+
+**Gate 3**: not held live. D5, D6 and D8 and the response table in the README; they're the parts most likely to come up.
