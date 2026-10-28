@@ -59,7 +59,7 @@ Short records of choices that outlive a single change. Each says what was reject
 
 ## D4. SQLite through better-sqlite3
 
-**Status**: Proposed
+**Status**: Accepted
 
 **Decision**: We will persist the menu and orders in one SQLite file through `better-sqlite3`.
 
@@ -74,7 +74,7 @@ Short records of choices that outlive a single change. Each says what was reject
 
 ## D5. The idempotency record lives on the order, and the order is written before the payment call
 
-**Status**: Proposed
+**Status**: Accepted
 
 **Decision**: We will store the idempotency key, a hash of the request, and the final response on the `orders` row (unique index on the key). The order is inserted as `pending_payment` in one transaction, the fake payment runs, and the result (status, pickup number, stored response) is written in a second transaction.
 
@@ -90,7 +90,7 @@ Short records of choices that outlive a single change. Each says what was reject
 
 ## D6. The server prices every order; a changed total is a 409, not a silent charge
 
-**Status**: Proposed
+**Status**: Accepted
 
 **Decision**: We will compute the total on the server from its own menu. If it differs from `clientTotalCents`, or an item is no longer available, the API answers `409` with every line re-priced, the new total, the unavailable item ids and the current menu version, and charges nothing.
 
@@ -119,7 +119,7 @@ Short records of choices that outlive a single change. Each says what was reject
 
 ## D8. Resuming after a reload looks the attempt up by its idempotency key
 
-**Status**: Proposed
+**Status**: Accepted
 
 **Decision**: We will add `GET /orders?idempotencyKey=…`. After a reload mid-payment, the kiosk reads the key from `sessionStorage` and asks the API what happened to that attempt.
 

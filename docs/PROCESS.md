@@ -113,3 +113,114 @@ How this went from an empty folder to a finished kiosk, one entry per phase, wri
 **Time**: about 5 minutes of agent time (23:55 to 23:58).
 
 **Gate 3**: not held live. D5, D6 and D8 and the response table in the README; they're the parts most likely to come up.
+
+## Phase 4: API
+
+**Decided before coding**
+
+- The contract from Phase 3, including 202 while a payment is still running.
+- Fake cards, pickup numbers, chaos flags, and no card number in the database or the logs.
+
+**What the tool was asked for**
+
+- `create` for the routes; `security-hardening` on input, card data and logs; `observability` per order; `testing-strategy` then Vitest at `app.inject()`.
+
+**Kept**
+
+- Menu and order routes wired into Fastify. The order is inserted as `pending_payment` before the fake charge runs.
+- One structured log line per order with `requestId`, `orderId`, `idempotencyKey` and `kioskId`. Pino redacts `*.cardNumber`; request/response serializers drop the raw body so a card number cannot ride along on `req`.
+- Pickup `A-001`, unique per day via `pickup_counters`.
+- Chaos from env: `CHAOS_LATENCY_MS`, `CHAOS_FAIL_RATE`.
+- HTTP-seam tests for H1, H2 (in-flight 202), H4, H5, H7, H9, H10, missing options, option-delta 409, and lookup by key.
+
+**Thrown away**
+
+- Logging the incoming body in the production path. A test hook did that to prove redaction, and the first version of the test captured Pino's arguments _before_ redaction, so it "found" the card number in the logger internals. The test now reads the serialised log line, which is what would be written to disk.
+
+**Time**: about 40 minutes of agent time.
+
+**Gate 4**: not held live. The diff to read is `apps/api/src/orders/` and `apps/api/test/orders.test.ts`.
+
+## Phase 5: kiosk client
+
+**Decided before coding**
+
+- Port the mockup's layout, tokens and copy. `useReducer` for the checkout machine (no XState: one machine, one file).
+- Idle, recovery screens and option sheet stay as designed.
+
+**What the tool was asked for**
+
+- `frontend-craft`, `forms` (numpad), `state-management` (reducer).
+
+**Kept**
+
+- Three zones, 56–72px targets, on-screen numpad, no OS keyboard.
+- Pay lock (`payLock` ref + `payPhase !== 'idle'`). Same `Idempotency-Key` on retry.
+- Network failure goes to "Checking your payment… Please don't pay again", then `GET /orders?idempotencyKey=`.
+- Menu backoff; last good menu in `localStorage`; payment blocked while the API is down.
+- `sessionStorage` for cart + in-flight key. `?kiosk=` for the kiosk id.
+- Idle 60s / 90s, 15s "Still there?", suspended during payment. Done resets after 12s.
+
+**Thrown away**
+
+- Dismissing a sheet or dialog by tapping the dimmed backdrop. Biome flagged it (a `div` with a click handler), and an accidental arm tap on a kiosk should not close a recovery screen. Each overlay has its own buttons.
+
+**Verification**
+
+- `pnpm --filter @kiosk/web test`: start screen + machine (add, options, pay lock, decline keeps the cart).
+- Playwright at 1280×800: happy path and double-tap.
+- I did not put this on a physical tablet over the LAN or on Slow 3G in this session. That walk is still mine.
+
+**Time**: about 90 minutes of agent time.
+
+**Gate 5**: not held live. Walk the flow with chaos on.
+
+## Phase 6: failure proof
+
+**Kept**
+
+- Playwright: happy path, and a double-tap that asserts a single `201`.
+- README "What happens when…" now has a trigger per H-item.
+
+**Thrown away**
+
+- Nothing.
+
+**Time**: about 20 minutes, including a first run that hit port 5173 already owned by another local app. E2E now uses 5180 / 3010.
+
+## Phase 7: show the work
+
+**Kept**
+
+- PROCESS (this file), DECISIONS D1–D8, SKIPPED.md.
+- `design-review`: one high-impact fix — Start was tappable while the menu was still loading, which opened an empty order screen. Start now waits until the menu is ready, and the loading state says so.
+
+**Thrown away**
+
+- Nothing invented. The rest of the review findings were polish (numpad animation, attract visuals) and sit under the cut line.
+
+**Time**: about 15 minutes.
+
+## Phase 8: release check
+
+**Commands and outcomes (this machine, 2026-10-28)**
+
+```
+pnpm verify
+# biome check: 53 files, clean
+# typecheck: shared, api, web
+# tests: 12 shared + 17 api + 5 web, all passing
+
+pnpm test:e2e
+# 2 passed (happy path, double-tap → one 201) at 1280×800
+
+docker compose up --build
+# api healthy; GET http://localhost:8800/api/health → {"status":"ok"}
+# GET http://localhost:8800 → Snack Bar HTML
+```
+
+No-Docker path: `pnpm install && pnpm dev` was already used for Playwright (API on 3010, Vite on 5180).
+
+No `.env` files with values, no PDF, no secrets in the tree (`.gitignore` covers `*.db`, `.env`, `*.pdf`).
+
+**Gate 8**: not held live. Nothing has been pushed.

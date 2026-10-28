@@ -32,7 +32,19 @@ Checks:
 
 ```bash
 pnpm verify   # lint, typecheck, unit and HTTP tests
+pnpm test:e2e # Playwright happy path + double-tap (needs Chromium)
 ```
+
+Chaos (API env, off by default):
+
+```bash
+CHAOS_LATENCY_MS=800 CHAOS_FAIL_RATE=0.3 pnpm --filter @kiosk/api dev
+```
+
+- `CHAOS_LATENCY_MS` — extra delay on every request
+- `CHAOS_FAIL_RATE` — fraction of requests that return 503 (0 to 1)
+
+Kiosk extras: `?kiosk=front-1` sets the kiosk id (defaults to `kiosk-1`). A reload mid-payment resumes via `GET /orders?idempotencyKey=…`. The last good menu is cached in `localStorage`; browsing still works when the API is down, payment is blocked.
 
 ## API
 
@@ -85,3 +97,22 @@ These are the requirements I set myself before writing code.
 | H8  | Finished                                                 | A big pickup number, then an automatic reset.                                                                      |
 | H9  | Money                                                    | Integer cents everywhere; the server computes the total.                                                           |
 | H10 | Card data                                                | Never stored or logged. Only the last 4 digits and a fake payment reference.                                       |
+
+How to trigger each one:
+
+| #   | Trigger                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------- |
+| H1  | Tap the reader (or Pay) twice. Or `pnpm test:e2e`.                                                            |
+| H2  | Use card `4000 0000 0000 9995`, or throttle to Slow 3G and drop the tab mid-submit. Reload resumes the check. |
+| H3  | Stop the API and reload. If a menu was cached, browsing still works.                                          |
+| H4  | Change a price in `apps/api/seed/menu.json`, restart the API, pay with a cart built on the old menu.          |
+| H5  | Card `4000 0000 0000 0002`.                                                                                   |
+| H6  | Wait ~60s on the menu or ~90s on checkout. "Still there?" lasts 15s.                                          |
+| H7  | Review and pay is disabled on an empty cart. The API rejects qty 0, qty 999 and unknown items with 400.       |
+| H8  | Tap to pay, or card `4242 4242 4242 4242`.                                                                    |
+| H9  | Every price in the seed and every total in the API is cents. `pnpm --filter @kiosk/api test` asserts it.      |
+| H10 | Pay with a card, then inspect the SQLite row and the API log. The HTTP test asserts both.                     |
+
+PCI, in one sentence: this is a fake keypad. A real deployment would tokenize through a PCI-certified terminal and never see a PAN.
+
+What I left out is in [`docs/SKIPPED.md`](docs/SKIPPED.md). How I got here is in [`docs/PROCESS.md`](docs/PROCESS.md). The durable choices are in [`docs/DECISIONS.md`](docs/DECISIONS.md).
