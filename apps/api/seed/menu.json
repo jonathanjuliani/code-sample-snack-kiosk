@@ -1,0 +1,243 @@
+{
+  "categories": [
+    { "id": "snacks", "label": "Snacks" },
+    { "id": "drinks", "label": "Drinks" },
+    { "id": "hot", "label": "Hot food" },
+    { "id": "sweets", "label": "Sweets" }
+  ],
+  "items": [
+    {
+      "id": "chips",
+      "categoryId": "snacks",
+      "name": "Salted chips",
+      "priceCents": 250,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "pretzels",
+      "categoryId": "snacks",
+      "name": "Pretzels",
+      "priceCents": 300,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "popcorn",
+      "categoryId": "snacks",
+      "name": "Popcorn",
+      "priceCents": 400,
+      "available": true,
+      "optionGroups": [
+        {
+          "id": "size",
+          "name": "Size",
+          "choices": [
+            { "id": "size-regular", "label": "Regular", "deltaCents": 0 },
+            { "id": "size-large", "label": "Large", "deltaCents": 150 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trail",
+      "categoryId": "snacks",
+      "name": "Trail mix",
+      "priceCents": 350,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "nachos",
+      "categoryId": "snacks",
+      "name": "Nachos with cheese",
+      "priceCents": 650,
+      "available": true,
+      "optionGroups": [
+        {
+          "id": "jalapenos",
+          "name": "Jalapeños",
+          "choices": [
+            { "id": "jalapenos-none", "label": "None", "deltaCents": 0 },
+            { "id": "jalapenos-add", "label": "Add jalapeños", "deltaCents": 50 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "peanuts",
+      "categoryId": "snacks",
+      "name": "Roasted peanuts",
+      "priceCents": 200,
+      "available": false,
+      "optionGroups": []
+    },
+    {
+      "id": "jerky",
+      "categoryId": "snacks",
+      "name": "Beef jerky",
+      "priceCents": 550,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "water",
+      "categoryId": "drinks",
+      "name": "Still water",
+      "priceCents": 200,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "soda",
+      "categoryId": "drinks",
+      "name": "Soda",
+      "priceCents": 300,
+      "available": true,
+      "optionGroups": [
+        {
+          "id": "flavor",
+          "name": "Flavor",
+          "choices": [
+            { "id": "flavor-cola", "label": "Cola", "deltaCents": 0 },
+            { "id": "flavor-lemon-lime", "label": "Lemon-lime", "deltaCents": 0 },
+            { "id": "flavor-orange", "label": "Orange", "deltaCents": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tea",
+      "categoryId": "drinks",
+      "name": "Iced tea",
+      "priceCents": 350,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "coffee",
+      "categoryId": "drinks",
+      "name": "Coffee",
+      "priceCents": 300,
+      "available": true,
+      "optionGroups": [
+        {
+          "id": "size",
+          "name": "Size",
+          "choices": [
+            { "id": "size-regular", "label": "Regular", "deltaCents": 0 },
+            { "id": "size-large", "label": "Large", "deltaCents": 100 }
+          ]
+        },
+        {
+          "id": "milk",
+          "name": "Milk",
+          "choices": [
+            { "id": "milk-none", "label": "None", "deltaCents": 0 },
+            { "id": "milk-dairy", "label": "Dairy", "deltaCents": 0 },
+            { "id": "milk-oat", "label": "Oat", "deltaCents": 50 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "oj",
+      "categoryId": "drinks",
+      "name": "Orange juice",
+      "priceCents": 400,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "sparkling",
+      "categoryId": "drinks",
+      "name": "Sparkling water",
+      "priceCents": 250,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "hotdog",
+      "categoryId": "hot",
+      "name": "Hot dog",
+      "priceCents": 550,
+      "available": true,
+      "optionGroups": [
+        {
+          "id": "toppings",
+          "name": "Toppings",
+          "choices": [
+            { "id": "toppings-plain", "label": "Plain", "deltaCents": 0 },
+            { "id": "toppings-onions", "label": "Onions", "deltaCents": 0 },
+            { "id": "toppings-chili", "label": "Chili", "deltaCents": 100 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bites",
+      "categoryId": "hot",
+      "name": "Pretzel bites",
+      "priceCents": 600,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "grilled",
+      "categoryId": "hot",
+      "name": "Grilled cheese",
+      "priceCents": 700,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "taco",
+      "categoryId": "hot",
+      "name": "Soft taco",
+      "priceCents": 450,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "cookie",
+      "categoryId": "sweets",
+      "name": "Chocolate chip cookie",
+      "priceCents": 250,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "brownie",
+      "categoryId": "sweets",
+      "name": "Brownie",
+      "priceCents": 350,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "candy",
+      "categoryId": "sweets",
+      "name": "Candy bar",
+      "priceCents": 200,
+      "available": true,
+      "optionGroups": []
+    },
+    {
+      "id": "icecream",
+      "categoryId": "sweets",
+      "name": "Ice cream cup",
+      "priceCents": 400,
+      "available": true,
+      "optionGroups": [
+        {
+          "id": "flavor",
+          "name": "Flavor",
+          "choices": [
+            { "id": "flavor-vanilla", "label": "Vanilla", "deltaCents": 0 },
+            { "id": "flavor-chocolate", "label": "Chocolate", "deltaCents": 0 }
+          ]
+        }
+      ]
+    }
+  ]
+}
