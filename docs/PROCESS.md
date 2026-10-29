@@ -2,6 +2,10 @@
 
 How this went from an empty folder to a finished kiosk, one entry per phase, written as I went. The agent drafted each entry from what actually happened in the session; I review and edit every line.
 
+**After the phases.** The runtime floor moved from Node 22 to Node 24 (26 still allowed). Docker, `.nvmrc`, `engines`, and `@types/node` all match 24. Phase 1 below still says 22, because that is what the machine had then. `better-sqlite3` stayed; `node:sqlite` is still a release candidate.
+
+Checked on Node 24.21.0: `pnpm verify` (12 + 17 + 5 tests), Playwright 2 passed, `docker compose up --build` with `node -v` inside the API container at `v24.21.0` and `GET :8800/api/health` returning `{"status":"ok"}`.
+
 ## Phase 0: what I decided up front
 
 **Before any code**

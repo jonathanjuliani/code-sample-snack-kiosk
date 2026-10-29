@@ -19,7 +19,7 @@ docker compose up --build
 
 Open <http://localhost:8800>. If that port is taken: `WEB_PORT=8900 docker compose up --build`.
 
-Without Docker (Node 22.18 or newer, pnpm 11; `corepack enable` gives you the pinned pnpm):
+Without Docker (Node 24 or 26, pnpm 11; `corepack enable` gives you the pinned pnpm):
 
 ```bash
 pnpm install
