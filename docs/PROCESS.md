@@ -240,3 +240,41 @@ pnpm verify
 `git ls-files` has no `.env` and no `.pdf`. `.gitignore` covers `*.db`, `.env`, `*.pdf`.
 
 **Gate 8**: not held live. Nothing has been pushed.
+
+## Phase 9: close the remaining gaps
+
+**Already true, left alone.** H1–H10, chaos flags, menu version, reload by idempotency key, cached menu with payment blocked, WAL, structured logs, and the traps (server prices, integer cents, no card number, recovery screens, no auth or CMS).
+
+**Added**
+
+- `/ops` in the same client, and `GET /ops/summary` plus `POST /ops/events`. Replays, 409s and declines increment in the order route. The kiosk posts a heartbeat every 30s and one idle reset when the countdown sends the next person to the start screen. No login; D9 says why.
+- Machine tests for a menu that never loads, a 409 the customer confirms, the idle reset, and Pay disabled while the API is down.
+- Playwright for a declined card, a dropped submit ("Please don't pay again"), and `/ops` showing the pickup number from a checkout.
+- The running total is the live region. Recovery screens keep `role="alert"`.
+
+**Still skipped.** Stock races and a screen recording. See SKIPPED.
+
+## Enhancement pass
+
+**Already true at the start.** H1–H10, menu version and ETag, lookup by idempotency key and by order id, cached menu with Pay blocked, integer cents, no card number stored or logged, and an unauthenticated `/ops` page. Chaos existed, but it returned 503 before the handler, so a dropped request had never saved an order.
+
+**What this pass changed**
+
+- `CHAOS_FAIL_RATE` now drops `POST /orders` only after the paid or declined row is committed. A replay of that key returns the one order. Latency still delays every request.
+- Staff assist posts `POST /kiosk/assist`. It shows on `/ops`, idle waits while it is open, and a second decline offers "Get staff help".
+- The customer screen was restyled to the enhancement spec: self-hosted Archivo and Inter, venue name and accent (white text must clear 4.5:1, or the snack-bar orange stays), category rail, three-column menu, order panel, and the screen copy from that spec. Option groups stayed. The 30-second "show this code" screen stayed for a payment that never resolves.
+- Idle is 60 seconds, then 10, with `?idle=` for demos. The done screen resets after 8 seconds. `/health` is checked every 10 seconds once a menu is loaded.
+- `/ops` now has the app version, a Stale label after two minutes, a text status pill, and the assist list. Counter names were left as they were.
+- Playwright now covers tap-to-done and the auto reset, double pay, a drop after commit, decline then another card, idle both ways, a price change, a sold-out line, a menu that 500s, payments going offline, an empty cart, and the quantity cap.
+
+**Thrown away**
+
+- The local "How this works" dialog. It never notified anyone.
+- The paged six-up grid and the system-ui token set from the first mockup.
+- A 503 before the order existed. That could not demonstrate a lost response.
+- 90 seconds of idle at checkout, and a 15-second countdown. Each key already restarts the clock.
+- Portrait Playwright, an axe run, and a reload-mid-payment Playwright test. The features stay; the extra tests were the cut line. See SKIPPED.
+
+**Verification**
+
+`pnpm verify` (lint, typecheck, 12 shared + 22 API + 12 web tests) and `pnpm test:e2e` (12 passed at 1280×800). A fresh clone and my own read-through of this file were left for the final pass.

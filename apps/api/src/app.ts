@@ -4,6 +4,8 @@ import Fastify, { type FastifyError, type FastifyServerOptions } from 'fastify';
 import type { Config } from './config.ts';
 import type { Db } from './db/database.ts';
 import { registerMenuRoutes } from './menu/routes.ts';
+import { registerOpsRoutes } from './ops/routes.ts';
+import { readSimulation } from './ops/simulation.ts';
 import { createOrderRepository } from './orders/order-repository.ts';
 import { createFakeGateway, type PaymentGateway, sleep } from './orders/payment.ts';
 import { registerOrderRoutes } from './orders/routes.ts';
@@ -39,7 +41,11 @@ export function buildApp(options: AppOptions) {
     failRate: options.config?.CHAOS_FAIL_RATE ?? 0,
   };
   const payments =
-    options.payments ?? createFakeGateway({ slowMs: options.config?.PAYMENT_SLOW_MS ?? 15_000 });
+    options.payments ??
+    createFakeGateway({
+      slowMs: options.config?.PAYMENT_SLOW_MS ?? 15_000,
+      paymentMode: () => readSimulation().payment,
+    });
   const orders = createOrderRepository(options.db);
 
   const app = Fastify({
@@ -48,14 +54,9 @@ export function buildApp(options: AppOptions) {
     genReqId: () => randomUUID(),
   });
 
-  app.addHook('onRequest', async (request, reply) => {
-    if (chaos.failRate > 0 && Math.random() < chaos.failRate) {
-      return reply.status(503).send({
-        error: 'unavailable',
-        message: 'The kiosk is temporarily unavailable. Please try again.',
-        requestId: request.id,
-      });
-    }
+  app.addHook('onRequest', async () => {
+    // Latency applies to every request. Fail rate does not: it drops POST /orders only after the
+    // order is committed, so a retry can still find the row (the network-drop case).
     if (chaos.latencyMs > 0) await sleep(chaos.latencyMs);
   });
 
@@ -74,9 +75,16 @@ export function buildApp(options: AppOptions) {
       .send({ error: 'bad_request', message: error.message, requestId: request.id });
   });
 
-  app.get('/health', async (): Promise<HealthResponse> => ({ status: 'ok' }));
+  app.get(
+    '/health',
+    async (): Promise<HealthResponse> => ({
+      status: 'ok',
+      payments: readSimulation().paymentsPaused ? 'down' : 'up',
+    }),
+  );
   registerMenuRoutes(app, options.db);
-  registerOrderRoutes(app, { db: options.db, orders, payments });
+  registerOrderRoutes(app, { db: options.db, orders, payments, failRate: chaos.failRate });
+  registerOpsRoutes(app, options.db);
 
   return app;
 }

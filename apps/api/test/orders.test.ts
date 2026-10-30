@@ -3,7 +3,7 @@ import type { LightMyRequestResponse } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadMenu, setChoiceDelta, setItemAvailable, setItemPrice } from '../src/menu/menu-repository.ts';
 import type { PaymentGateway } from '../src/orders/payment.ts';
-import { APPROVE, createTestApp, DECLINE, KEY_A, KEY_B } from './harness.ts';
+import { APPROVE, createTestApp, DECLINE, KEY_A, KEY_B, SLOW } from './harness.ts';
 
 type AppHandle = ReturnType<typeof createTestApp>;
 
@@ -193,6 +193,89 @@ describe('POST /orders', () => {
       KEY_B,
     );
     expect(unknown.statusCode).toBe(400);
+  });
+
+  it('approves a slow card within the test timeout', async () => {
+    const { app } = await setup();
+    const { version } = await menuVersion(app);
+    const res = await postOrder(
+      app,
+      tapBody(version, { payment: { method: 'card', cardNumber: SLOW } }),
+      KEY_A,
+    );
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('paid');
+    expect(res.json().last4).toBe('9995');
+  });
+
+  it('drops the response after commit when chaos is on, then the replay returns that one order', async () => {
+    const { app, db } = await setup({ failRate: 1 });
+    const { version } = await menuVersion(app);
+    const menu = await app.inject({ method: 'GET', url: '/menu' });
+    expect(menu.statusCode).toBe(200);
+
+    const body = tapBody(version, { payment: { method: 'card', cardNumber: SLOW } });
+    let dropped = false;
+    try {
+      const first = await postOrder(app, body, KEY_A);
+      dropped = first.statusCode !== 201 && first.statusCode !== 200;
+    } catch {
+      dropped = true;
+    }
+    expect(dropped).toBe(true);
+
+    const count = db.prepare('SELECT COUNT(*) AS n FROM orders').get() as { n: number };
+    expect(count.n).toBe(1);
+    const row = db.prepare('SELECT status FROM orders').get() as { status: string };
+    expect(row.status).toBe('paid');
+
+    const replay = await postOrder(app, body, KEY_A);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.headers['idempotent-replayed']).toBe('true');
+    expect(replay.json().status).toBe('paid');
+    const after = db.prepare('SELECT COUNT(*) AS n FROM orders').get() as { n: number };
+    expect(after.n).toBe(1);
+  });
+
+  it('keeps one row when two requests share a key', async () => {
+    let release!: (value: { approved: true; reference: string }) => void;
+    const held = new Promise<{ approved: true; reference: string }>((resolve) => {
+      release = resolve;
+    });
+    const payments: PaymentGateway = { charge: () => held };
+    const { app, db } = await setup({ payments });
+    const { version } = await menuVersion(app);
+    const body = tapBody(version);
+    const both = Promise.all([postOrder(app, body, KEY_A), postOrder(app, body, KEY_A)]);
+    await new Promise((r) => setTimeout(r, 20));
+    release({ approved: true, reference: 'fake_race' });
+    const [left, right] = await both;
+    const statuses = [left.statusCode, right.statusCode].sort((a, b) => a - b);
+    expect(statuses).toEqual([201, 202]);
+    const count = db.prepare('SELECT COUNT(*) AS n FROM orders').get() as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it('returns a paid order, a failed order, and 404 for an unknown id', async () => {
+    const { app } = await setup();
+    const { version } = await menuVersion(app);
+    const paid = await postOrder(app, tapBody(version), KEY_A);
+    const paidId = paid.json().orderId as string;
+    const byId = await app.inject({ method: 'GET', url: `/orders/${paidId}` });
+    expect(byId.statusCode).toBe(200);
+    expect(byId.json().status).toBe('paid');
+
+    const declined = await postOrder(
+      app,
+      tapBody(version, { payment: { method: 'card', cardNumber: DECLINE } }),
+      KEY_B,
+    );
+    const failed = await app.inject({ method: 'GET', url: `/orders/${declined.json().orderId}` });
+    expect(failed.statusCode).toBe(200);
+    expect(failed.json().status).toBe('payment_failed');
+
+    const missing = await app.inject({ method: 'GET', url: '/orders/missing-order' });
+    expect(missing.statusCode).toBe(404);
   });
 
   it('returns 202 while a payment is still running, then the paid response', async () => {

@@ -4,6 +4,6 @@ import { App } from '../src/app.tsx';
 
 describe('web entry', () => {
   it('renders the start screen', () => {
-    expect(renderToString(<App />)).toContain('Tap anywhere');
+    expect(renderToString(<App />)).toContain('Order here.');
   });
 });

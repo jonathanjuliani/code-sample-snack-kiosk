@@ -101,6 +101,60 @@ const GLYPH: Record<string, string> = {
   sweets: 'M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16Z',
 };
 
+export function HandIcon({ size = 28 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 11V6.5a1.5 1.5 0 0 1 3 0V11M11 10V5.5a1.5 1.5 0 0 1 3 0V11M14 10.5V7.5a1.5 1.5 0 0 1 3 0V13"
+        strokeLinecap="round"
+      />
+      <path d="M8 11V8.5a1.5 1.5 0 0 0-3 0V14a6 6 0 0 0 6 6h2a6 6 0 0 0 6-6v-1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function DeleteIcon({ size = 28 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      aria-hidden="true"
+    >
+      <path d="M19 7 11 15M11 7l8 8" strokeLinecap="round" />
+      <path d="M21 12H9L4 7.5v9L9 12" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function ReaderIcon({ size = 56 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 15h4M3 10h18" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function CategoryGlyph({ categoryId }: { categoryId: string }) {
   const d = GLYPH[categoryId] ?? GLYPH.snacks;
   return (

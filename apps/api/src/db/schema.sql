@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   id TEXT PRIMARY KEY,
   category_id TEXT NOT NULL REFERENCES categories(id),
   name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   available INTEGER NOT NULL CHECK (available IN (0, 1)),
   sort INTEGER NOT NULL,
@@ -53,4 +54,31 @@ CREATE TABLE IF NOT EXISTS order_lines (
 CREATE TABLE IF NOT EXISTS pickup_counters (
   day TEXT PRIMARY KEY,
   last_number INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ops_counters (
+  name TEXT PRIMARY KEY,
+  value INTEGER NOT NULL CHECK (value >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS kiosk_seen (
+  kiosk_id TEXT PRIMARY KEY,
+  last_seen_at TEXT NOT NULL,
+  app_version TEXT NOT NULL DEFAULT '',
+  screen TEXT,
+  pay_phase TEXT,
+  item_count INTEGER,
+  total_cents INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS venue (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name TEXT NOT NULL,
+  accent TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS assist_requests (
+  id TEXT PRIMARY KEY,
+  kiosk_id TEXT NOT NULL,
+  opened_at TEXT NOT NULL
 );

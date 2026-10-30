@@ -23,9 +23,9 @@ Short records of choices that outlive a single change. Each says what was reject
 | Declined                | Error. "Card not accepted", no blame, no bank codes. Order kept; "Try another card" or "Back to order".                                                                                                  |
 | API down                | A warning strip; browsing works, Pay disabled with the reason on the button. Recovers on its own.                                                                                                        |
 
-**Idle**: 60s on the order screen, 90s on checkout, then a 15s "Still there?" countdown. Suspended while a payment is in progress, being checked, or unresolved. Done resets after 12s.
+**Idle**: 60s on the order screen, 90s on checkout, then a 15s "Still there?" countdown. Suspended while a payment is in progress, being checked, or unresolved. Done resets after 12s. Superseded by D15.
 
-**Tokens**: the role-based set in the mockup (type 18 / 20 / 24 / 32 / 40 / 56, spacing 4 to 48, AA contrast minimum and AAA for totals, one light theme on purpose). The web app copies these values unchanged into `apps/web/src/styles/tokens.css`.
+**Tokens**: the role-based set in the mockup (type 18 / 20 / 24 / 32 / 40 / 56, spacing 4 to 48, AA contrast minimum and AAA for totals, one light theme on purpose). The first client copied these values. D10 replaces them with the enhancement-pass set in `apps/web/src/styles/tokens.css`.
 
 **Consequences**: The client is one screen machine, which makes every recovery state explicit and testable. Reopen if the kiosk ever needs deep links (it shouldn't).
 
@@ -130,3 +130,113 @@ Short records of choices that outlive a single change. Each says what was reject
 - _Re-send the original `POST`_ (rejected): the card number can't be kept in `sessionStorage`, so the retried body would differ and get `422`.
 
 **Consequences**: `GET /orders/:id` stays for staff and debugging. Within one page session, a network drop still retries the original `POST` with the same key (the card number is in memory).
+
+## D9. The counter page is unauthenticated
+
+**Status**: Accepted
+
+**Decision**: We will serve a read-only `/ops` page and `GET /ops/summary` with no login. The kiosk posts a heartbeat and an idle reset to `POST /ops/events`. Replays, 409s and declines are counted inside the order route.
+
+**Options considered**
+
+- _Same app, no auth_ (chosen): one page you can open after a double-tap and see the counter move. A second app, or a login, is more to run on clone than the page is worth.
+- _Staff auth now_ (rejected): there are no accounts, and a fake login would pretend this is a back office.
+- _Leave it written in Skipped_ (rejected for this pass): the reliability story was already in the API, and the page is the two-minute demo of it.
+
+**Consequences**: Anyone who can reach the API can read recent orders (status, kiosk, total, pickup number, no card data) and open staff-assist requests. Say so in the README. A real counter sits behind staff sign-in, in front of these routes. D16 lets the same page write simulation flags. The summary of orders, counters, kiosks, and assists stays a read.
+
+The summary keeps the counter names from the first `/ops` pass (`idempotentReplays`, `reprices`, `declines`, `idleResets`). Renaming them to match a later sketch would churn the tests for no change in what the page shows. The heartbeat stays `POST /ops/events` and now carries `appVersion`. A kiosk last seen more than two minutes ago is marked Stale, in words, not by color alone.
+
+## D10. The customer screen follows the enhancement mockup
+
+**Status**: Accepted
+
+**Decision**: We will restyle the kiosk to the enhancement-pass spec: Archivo and Inter, the snack-bar orange, a 220px category rail, a 3-column menu, a 380px order panel, and the screen copy in that spec. D1's system font, dark buttons, and paged grid are the earlier mockup. This pass replaces that look. Option groups stay (D7).
+
+**Options considered**
+
+- _Restyle in place_ (chosen): the behavior was already right. The look was the gap.
+- _Keep D1's look_ (rejected): the enhancement mockup was my newer and fuller design of the same screen. D1's look was the first draft.
+
+**Consequences**: Tokens live in `apps/web/src/styles/tokens.css`. Components do not carry their own hex colors. If checking a payment never gets a terminal answer, the 30-second counter code stays. The spec assumes the poll resolves; a customer whose request never comes back still needs something to show at the counter.
+
+## D11. Fonts are self-hosted
+
+**Status**: Accepted
+
+**Decision**: We will ship Archivo (600/700/800) and Inter (400–700), Latin only, from `@fontsource/archivo` and `@fontsource/inter`, with `font-display: swap`.
+
+**Options considered**
+
+- _Self-hosted files_ (chosen): a kiosk that cannot render without a third-party CDN is not a kiosk.
+- _Google Fonts_ (rejected): the clone-and-run path has to work offline.
+- _System fonts_ (rejected): that was D1. The enhancement mockup names Archivo and Inter.
+
+**Consequences**: Two font packages, and only the weights the screens use.
+
+## D12. The accent belongs to the venue
+
+**Status**: Accepted
+
+**Decision**: `GET /menu` returns `venue: { name, accent }`. The client sets `--accent` only when white text on that color is at least 4.5:1. Otherwise it keeps `#C2410C` and logs a warning. The screen shows the venue name. It never shows the name or logo of whoever made the software.
+
+**Options considered**
+
+- _Per-venue accent, contrast-checked_ (chosen): these kiosks run under the venue's brand, and a failed contrast check would make the primary button unreadable.
+- _One hard-coded orange_ (rejected): the brand line would be ours, not the operator's.
+
+**Consequences**: Tints and the accent ink are derived with `color-mix` from `--accent`. The seed venue is Snack Bar / `#C2410C`.
+
+## D13. Chaos drops the order response after it is saved
+
+**Status**: Accepted
+
+**Decision**: `CHAOS_FAIL_RATE` applies only to `POST /orders`, and only after the paid or declined row is committed. The socket is destroyed, so the kiosk sees a network drop. The same idempotency key then replays the stored order. `CHAOS_LATENCY_MS` still delays every request.
+
+**Options considered**
+
+- _Drop after commit_ (chosen): that is the double-charge case. The server succeeded and the client did not see it.
+- _503 before the handler_ (rejected; it is what the first pass did): the order was never saved, so a retry is a new charge, not a replay.
+
+**Consequences**: Menu, health, and `/ops` stay up when the fail rate is 1. A replay is not dropped, or the kiosk could never recover.
+
+## D14. Staff assist is a real request
+
+**Status**: Accepted
+
+**Decision**: "Staff assist" posts `POST /kiosk/assist { kioskId }`. The open request shows on `/ops`. Idle does not fire while that request is active. After a second decline, the secondary button is "Get staff help" instead of "Use another card".
+
+**Options considered**
+
+- _A stored request_ (chosen): the counter can see that someone is waiting.
+- _A local help dialog_ (rejected): it told the customer how the kiosk works and told nobody else.
+
+**Consequences**: The request stays open for the demo. There is no "staff arrived" button. Idle stays paused until the order is cleared.
+
+## D15. Idle is one minute, then ten seconds
+
+**Status**: Accepted
+
+**Decision**: Idle is 60 seconds on the menu and on pay, then a 10-second "Are you still there?" countdown. `?idle=` overrides the first wait, in seconds, for demos. The done screen returns to the attract screen after 8 seconds. Each tap restarts the clock. Payment in progress, checking, and an open staff-assist request do not.
+
+**Options considered**
+
+- _60s / 10s, with `?idle=`_ (chosen): one number to explain, and a query param so a demo does not wait a minute.
+- _60s on the menu and 90s at checkout_ (rejected; it is what D1 recorded): typing a card already restarts the clock on each key, so the extra 30 seconds was not buying much.
+
+**Consequences**: D1's idle paragraph is the earlier rule. This one wins.
+
+## D16. The counter can force the recovery cases
+
+**Status**: Accepted
+
+**Decision**: We will let `/ops` write an in-memory simulation: the next payment result, paused payments, a failing menu, a fifty-cent price bump, and one sold-out item. The kiosk keeps reacting to the menu, to health, and to `POST /orders`. The counter will not tap, reset, or resize the customer screen.
+
+**Options considered**
+
+- _Server flags the kiosk already understands_ (chosen): one laptop on `/ops` and one tablet on the kiosk. The flags are not written into the menu rows, so a restart restores the seed.
+- _Mutate the kiosk from the same page, as the mockup sidebar does_ (rejected): `/ops` and the kiosk are different routes, and a portrait toggle cannot resize the tablet.
+- _Remote commands for tap and reset_ (rejected): that is a channel from the counter into the cart. D9 kept the counter from driving the customer.
+- _Persist the flags in SQLite_ (rejected): a crash would leave a bumped price in the seed. Memory plus Reset is enough for a demo.
+
+**Consequences**: Anyone who can reach the API can pause payments or force a decline. That is the same trust as D9, and a real counter still wants staff sign-in. `CHAOS_FAIL_RATE` still applies when the payment select is "Follow the card"; a chosen result does not also roll that dice. "No response, never resolves" leaves a `pending_payment` row. The heartbeat may carry the screen, the pay phase, the item count, and the total. It still carries no card number. Reopen if the counter gets sign-in, or if a demo needs to drive the customer's screen.

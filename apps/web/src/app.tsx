@@ -1,13 +1,22 @@
-import { CARD_NUMBER_DIGITS, menuSchema, type OrderRequest } from '@kiosk/shared';
-import { type Dispatch, useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { fetchHealth, fetchMenu, lookupAttempt, type SubmitResult, submitOrder } from './api';
-import { ArrowIcon, CategoryGlyph, ErrorIcon, OkIcon, TrashIcon, WarnIcon } from './icons';
+import { CARD_NUMBER_DIGITS, type Menu, menuSchema, type OrderRequest } from '@kiosk/shared';
+import { type Dispatch, type ReactNode, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
+  fetchHealth,
+  fetchMenu,
+  lookupAttempt,
+  postAssist,
+  postOpsEvent,
+  type SubmitResult,
+  submitOrder,
+} from './api';
+import { applyVenueAccent } from './contrast';
+import { DeleteIcon, ErrorIcon, HandIcon, OkIcon, ReaderIcon, WarnIcon } from './icons';
+import {
+  type Action,
   canPay,
   cartCount,
   cartTotalCents,
   createInitialState,
-  ITEMS_PER_PAGE,
   idleLimitMs,
   inPayment,
   itemById,
@@ -18,6 +27,7 @@ import {
   TIMEOUTS,
   unitPriceCents,
 } from './machine';
+import { OpsPage } from './ops';
 import {
   cacheMenu,
   clearAttempt,
@@ -25,20 +35,37 @@ import {
   loadAttempt,
   loadCachedMenu,
   loadCart,
+  readIdleMs,
   readKioskId,
   saveAttempt,
   saveCart,
 } from './storage';
+import { APP_VERSION } from './version';
 import './styles/kiosk.css';
 
-const kioskId = typeof window === 'undefined' ? 'kiosk-1' : readKioskId();
+const kioskId = typeof window === 'undefined' ? 'counter-1' : readKioskId();
+const idleMs = typeof window === 'undefined' ? TIMEOUTS.idleMs : readIdleMs(TIMEOUTS.idleMs);
+const showingOps = typeof window !== 'undefined' && window.location.pathname === '/ops';
+if (showingOps) document.documentElement.dataset.surface = 'ops';
 
 export function App() {
+  if (showingOps) return <OpsPage />;
+  return <Kiosk />;
+}
+
+function Kiosk() {
   const [state, dispatch] = useReducer(reduce, undefined, createInitialState);
   const [now, setNow] = useState(() => Date.now());
+  const [menuSlow, setMenuSlow] = useState(false);
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const [payArmed, setPayArmed] = useState(false);
   const lastActivity = useRef(Date.now());
   const payLock = useRef(false);
   const checkingSince = useRef<number | null>(null);
+  const idleReported = useRef(false);
+  const assistSent = useRef(false);
+  const doneUntil = useRef<number | null>(null);
+  const reloadMenu = useRef<() => void>(() => {});
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -49,7 +76,10 @@ export function App() {
   useEffect(() => {
     const cached = loadCachedMenu();
     const parsed = cached ? menuSchema.safeParse(cached) : null;
-    if (parsed?.success) dispatch({ type: 'menu/stale', menu: parsed.data });
+    if (parsed?.success) {
+      applyVenueAccent(parsed.data.venue.accent);
+      dispatch({ type: 'menu/stale', menu: parsed.data });
+    }
 
     const attempt = loadAttempt();
     const cart = loadCart();
@@ -59,11 +89,20 @@ export function App() {
 
     let cancelled = false;
     let attemptNo = 0;
+    let timer = 0;
+    const slowTimer = window.setTimeout(() => {
+      if (!cancelled) setMenuSlow(true);
+    }, 1500);
+
     const load = async () => {
+      window.clearTimeout(timer);
       try {
         const menu = await fetchMenu();
         if (cancelled) return;
         cacheMenu(menu);
+        applyVenueAccent(menu.venue.accent);
+        setRetryAt(null);
+        setMenuSlow(false);
         dispatch({ type: 'menu/loaded', menu });
         attemptNo = 0;
       } catch {
@@ -71,16 +110,71 @@ export function App() {
         dispatch({ type: 'menu/failed' });
         const wait = TIMEOUTS.menuBackoffMs[Math.min(attemptNo, TIMEOUTS.menuBackoffMs.length - 1)] ?? 5000;
         attemptNo += 1;
-        window.setTimeout(() => {
+        setRetryAt(Date.now() + wait);
+        timer = window.setTimeout(() => {
           if (!cancelled) void load();
         }, wait);
       }
     };
+
+    reloadMenu.current = () => {
+      attemptNo = 0;
+      void load();
+    };
     void load();
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      window.clearTimeout(slowTimer);
     };
   }, []);
+
+  useEffect(() => {
+    const send = () => {
+      const current = stateRef.current;
+      void postOpsEvent({
+        kioskId,
+        kind: 'heartbeat',
+        appVersion: APP_VERSION,
+        screen: current.screen,
+        payPhase: current.payPhase,
+        itemCount: cartCount(current.lines),
+        totalCents: cartTotalCents(current.lines),
+      });
+    };
+    send();
+    const id = window.setInterval(send, 30_000);
+    return () => window.clearInterval(id);
+  }, [state.screen, state.payPhase, state.lines]);
+
+  useEffect(() => {
+    if (!state.menu) return;
+    let cancelled = false;
+    const tick = async () => {
+      const health = await fetchHealth();
+      if (cancelled) return;
+      if (health === 'up' && stateRef.current.apiDown) {
+        dispatch({ type: 'api/up' });
+        try {
+          const menu = await fetchMenu();
+          if (cancelled) return;
+          cacheMenu(menu);
+          applyVenueAccent(menu.venue.accent);
+          dispatch({ type: 'menu/loaded', menu });
+        } catch {
+          if (!cancelled) dispatch({ type: 'menu/failed' });
+        }
+        return;
+      }
+      if (health !== 'up' && !stateRef.current.apiDown) dispatch({ type: 'api/down' });
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [state.menu]);
 
   useEffect(() => {
     if (state.screen === 'done' || state.lines.length === 0) {
@@ -92,6 +186,10 @@ export function App() {
     }
     saveCart(state.lines);
   }, [state.lines, state.screen]);
+
+  useEffect(() => {
+    if (!state.assistActive) assistSent.current = false;
+  }, [state.assistActive]);
 
   useEffect(() => {
     const onPointer = () => bumpActivity();
@@ -108,19 +206,30 @@ export function App() {
     return () => window.clearInterval(id);
   }, []);
 
+  const resetFromIdle = useCallback(() => {
+    if (idleReported.current) return;
+    idleReported.current = true;
+    dispatch({ type: 'start-over/confirm' });
+    clearCart();
+    clearAttempt();
+    payLock.current = false;
+    void postOpsEvent({ kioskId, kind: 'idle_reset' });
+  }, []);
+
+  useEffect(() => {
+    if (state.stillThereUntil === null) idleReported.current = false;
+  }, [state.stillThereUntil]);
+
   useEffect(() => {
     if (state.stillThereUntil && now >= state.stillThereUntil) {
-      dispatch({ type: 'start-over/confirm' });
-      clearCart();
-      clearAttempt();
-      payLock.current = false;
+      resetFromIdle();
       return;
     }
-    const limit = idleLimitMs(state);
+    const limit = idleLimitMs(state, idleMs);
     if (limit && !state.stillThereUntil && now - lastActivity.current > limit) {
       dispatch({ type: 'idle/prompt', until: now + TIMEOUTS.stillThereMs });
     }
-  }, [now, state]);
+  }, [now, state, resetFromIdle]);
 
   useEffect(() => {
     if (state.screen !== 'done' || !state.pickupNumber) return;
@@ -147,7 +256,13 @@ export function App() {
       payLock.current = false;
       checkingSince.current = null;
       clearAttempt();
-      dispatch({ type: 'pay/paid', pickupNumber: result.order.pickupNumber });
+      dispatch({
+        type: 'pay/paid',
+        pickupNumber: result.order.pickupNumber,
+        method: result.order.paymentMethod,
+        last4: result.order.last4,
+        totalCents: result.order.totalCents,
+      });
       return;
     }
     if (result.kind === 'declined') {
@@ -209,6 +324,12 @@ export function App() {
   }, [applyResult, buildRequest]);
 
   useEffect(() => {
+    if (!payArmed) return;
+    setPayArmed(false);
+    void pay();
+  }, [payArmed, pay]);
+
+  useEffect(() => {
     if (state.payPhase !== 'checking' || !state.idempotencyKey) return;
     let cancelled = false;
     const key = state.idempotencyKey;
@@ -256,691 +377,428 @@ export function App() {
     };
   }, [state.payPhase, state.idempotencyKey, applyResult, buildRequest]);
 
-  useEffect(() => {
-    if (!state.apiDown) return;
-    const id = window.setInterval(async () => {
-      if (await fetchHealth()) {
-        dispatch({ type: 'api/up' });
-        try {
-          const menu = await fetchMenu();
-          cacheMenu(menu);
-          dispatch({ type: 'menu/loaded', menu });
-        } catch {
-          dispatch({ type: 'menu/failed' });
-        }
+  const requestAssist = useCallback(() => {
+    dispatch({ type: 'assist/open' });
+    if (assistSent.current) return;
+    assistSent.current = true;
+    void postAssist(kioskId);
+  }, []);
+
+  const startOver = useCallback(() => {
+    dispatch({ type: 'start-over/confirm' });
+    clearCart();
+    clearAttempt();
+    payLock.current = false;
+  }, []);
+
+  const retryPayments = useCallback(async () => {
+    if ((await fetchHealth()) === 'up') {
+      dispatch({ type: 'api/up' });
+      try {
+        const menu = await fetchMenu();
+        cacheMenu(menu);
+        applyVenueAccent(menu.venue.accent);
+        dispatch({ type: 'menu/loaded', menu });
+      } catch {
+        dispatch({ type: 'menu/failed' });
       }
-    }, 3000);
-    return () => window.clearInterval(id);
-  }, [state.apiDown]);
+    }
+  }, []);
+
+  if (state.screen === 'done' && doneUntil.current === null) {
+    doneUntil.current = Date.now() + TIMEOUTS.doneResetMs;
+  }
+  if (state.screen !== 'done') doneUntil.current = null;
 
   const stillSeconds = state.stillThereUntil
     ? Math.max(0, Math.ceil((state.stillThereUntil - now) / 1000))
     : 0;
+  const doneSeconds = doneUntil.current ? Math.max(0, Math.ceil((doneUntil.current - now) / 1000)) : 0;
+  const retrySeconds = retryAt ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : 0;
+  const venueName = state.menu?.venue.name ?? 'Snack Bar';
+  const showShell = state.screen === 'order' || state.screen === 'checkout';
+  const paymentsDown = state.screen === 'checkout' && state.apiDown && state.payPhase === 'idle';
 
   return (
-    <div className="kiosk" aria-live="polite">
-      {state.screen === 'start' && (
-        <StartScreen status={state.menuStatus} onStart={() => dispatch({ type: 'start' })} />
-      )}
-      {state.screen === 'order' && (
-        <OrderScreen state={state} dispatch={dispatch} onPay={() => dispatch({ type: 'review' })} />
-      )}
-      {state.screen === 'checkout' && (
-        <CheckoutScreen state={state} dispatch={dispatch} onPay={() => void pay()} />
-      )}
-      {state.screen === 'done' && (
+    <div className="kiosk">
+      {state.screen === 'start' ? (
+        <Attract name={venueName} onStart={() => dispatch({ type: 'start' })} />
+      ) : null}
+      {state.screen === 'done' ? (
         <DoneScreen
-          pickupNumber={state.pickupNumber ?? ''}
+          state={state}
+          seconds={doneSeconds}
           onDone={() => {
             dispatch({ type: 'start-over/confirm' });
             payLock.current = false;
           }}
         />
-      )}
-      {state.sheet && <OptionSheet state={state} dispatch={dispatch} />}
-      {state.help && <HelpDialog onClose={() => dispatch({ type: 'help/close' })} />}
-      {state.confirmStartOver && (
-        <ConfirmStartOver
-          onYes={() => {
-            dispatch({ type: 'start-over/confirm' });
-            clearCart();
-            clearAttempt();
-            payLock.current = false;
+      ) : null}
+      {showShell ? (
+        <Shell
+          state={state}
+          dispatch={dispatch}
+          venueName={venueName}
+          menuSlow={menuSlow}
+          retrySeconds={retrySeconds}
+          onRetryMenu={() => reloadMenu.current()}
+          onAssist={requestAssist}
+          onPrimary={() => {
+            if (state.screen === 'order') dispatch({ type: 'review' });
+            else void pay();
           }}
-          onNo={() => dispatch({ type: 'start-over/cancel' })}
+          onStartOver={() => dispatch({ type: 'start-over/ask' })}
         />
-      )}
-      {state.stillThereUntil && (
+      ) : null}
+      {state.sheet ? <OptionSheet state={state} dispatch={dispatch} /> : null}
+      {state.payPhase === 'processing' || state.payPhase === 'checking' ? (
+        <StatusDialog phase={state.payPhase} />
+      ) : null}
+      {state.payPhase === 'declined' ? (
+        <DeclinedDialog
+          second={state.declineCount >= 2}
+          onRetry={() => dispatch({ type: 'pay/retry' })}
+          onOther={() => dispatch({ type: 'pay/other-card' })}
+          onAssist={requestAssist}
+        />
+      ) : null}
+      {state.payPhase === 'totalChanged' && state.priceChange ? (
+        <TotalDialog
+          state={state}
+          onPay={() => {
+            dispatch({ type: 'accept-price' });
+            setPayArmed(true);
+          }}
+          onEdit={() => dispatch({ type: 'edit-order' })}
+        />
+      ) : null}
+      {paymentsDown ? (
+        <PaymentsDownDialog onRetry={() => void retryPayments()} onStartOver={startOver} />
+      ) : null}
+      {state.payPhase === 'unresolved' ? (
+        <UnresolvedDialog code={state.unresolvedCode ?? ''} onDone={startOver} />
+      ) : null}
+      {state.assistDialog ? <AssistDialog onWait={() => dispatch({ type: 'assist/wait' })} /> : null}
+      {state.confirmStartOver ? (
+        <ConfirmStartOver onYes={startOver} onNo={() => dispatch({ type: 'start-over/cancel' })} />
+      ) : null}
+      {state.stillThereUntil ? (
         <StillThere
           seconds={stillSeconds}
           onKeep={() => dispatch({ type: 'idle/keep' })}
-          onReset={() => {
-            dispatch({ type: 'start-over/confirm' });
-            clearCart();
-            clearAttempt();
-            payLock.current = false;
-          }}
+          onReset={resetFromIdle}
         />
-      )}
+      ) : null}
     </div>
   );
 }
 
-function Header({
-  title,
-  canLeave,
-  apiDown,
-  dispatch,
-}: {
-  title: string;
-  canLeave: boolean;
-  apiDown: boolean;
-  dispatch: Dispatch<Parameters<typeof reduce>[1]>;
-}) {
+function Attract({ name, onStart }: { name: string; onStart: () => void }) {
   return (
-    <>
-      <header className="hdr">
-        <div className="slot">
-          {canLeave ? (
-            <button type="button" className="k k-quiet" onClick={() => dispatch({ type: 'start-over/ask' })}>
-              Start over
-            </button>
-          ) : null}
-        </div>
-        <div className="title">{title}</div>
-        <div className="slot r">
-          <button type="button" className="k k-quiet" onClick={() => dispatch({ type: 'help/open' })}>
-            Help
-          </button>
-        </div>
-      </header>
-      {apiDown ? (
-        <div className="strip" role="status">
-          <WarnIcon size={28} />
-          <span>Payment is unavailable right now. You can still browse.</span>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function StartScreen({ status, onStart }: { status: KioskState['menuStatus']; onStart: () => void }) {
-  if (status === 'unavailable') {
-    return (
-      <div className="screen start" role="status">
-        <div className="brand">Snack Bar</div>
-        <div className="unavailable">
-          <div className="cta" style={{ fontSize: 'var(--text-heading)' }}>
-            Ordering is unavailable right now
-          </div>
-          <p className="sub">We are trying to reconnect. Please check back in a minute.</p>
-        </div>
-      </div>
-    );
-  }
-  if (status === 'loading') {
-    return (
-      <div className="screen start" role="status">
-        <div className="brand">Snack Bar</div>
-        <div className="cta">
-          Tap anywhere
-          <br />
-          to start
-        </div>
-        <div className="sub">Loading the menu…</div>
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      className="screen start"
-      onClick={onStart}
-      style={{ border: 0, background: 'transparent' }}
-    >
-      <div className="brand">Snack Bar</div>
-      <div className="cta">
-        Tap anywhere
-        <br />
-        to start
-      </div>
-      <div className="sub">Order and pay here. Pick up at the counter.</div>
+    <button type="button" className="attract" onClick={onStart}>
+      <p className="brand">{name}</p>
+      <h1>Order here.</h1>
+      <p className="sub">Pick, pay, and grab it at the counter.</p>
+      <span className="pill">
+        <HandIcon /> Tap to start
+      </span>
     </button>
   );
 }
 
-function OrderLines({
-  state,
-  editable,
-  dispatch,
-}: {
-  state: KioskState;
-  editable: boolean;
-  dispatch: Dispatch<Parameters<typeof reduce>[1]>;
-}) {
-  if (state.lines.length === 0) return <div className="empty">Tap an item to add it.</div>;
-  return (
-    <>
-      {state.lines.map((line) => {
-        const item = itemById(state.menu, line.itemId);
-        const name = item?.name ?? line.itemId;
-        return (
-          <div className="line" key={line.key}>
-            <div>
-              <div className="ln">
-                {editable ? '' : `${line.qty} × `}
-                {name}
-              </div>
-              {line.optionLabels.length > 0 ? <div className="lo">{line.optionLabels.join(', ')}</div> : null}
-            </div>
-            <div className="lp num">{money(line.qty * line.unitPriceCents)}</div>
-            {editable ? (
-              <div className="stepper">
-                <button
-                  type="button"
-                  className="k k-quiet"
-                  aria-label={line.qty === 1 ? `Remove ${name}` : `Remove one ${name}`}
-                  onClick={() => dispatch({ type: 'line/dec', key: line.key })}
-                >
-                  {line.qty === 1 ? <TrashIcon /> : <span aria-hidden="true">−</span>}
-                </button>
-                <span className="q num">{line.qty}</span>
-                <button
-                  type="button"
-                  className="k k-quiet"
-                  aria-label={`Add one ${name}`}
-                  disabled={line.qty >= 10}
-                  onClick={() => dispatch({ type: 'line/inc', key: line.key })}
-                >
-                  +
-                </button>
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function OrderScreen({
+function Shell({
   state,
   dispatch,
-  onPay,
+  venueName,
+  menuSlow,
+  retrySeconds,
+  onRetryMenu,
+  onAssist,
+  onPrimary,
+  onStartOver,
 }: {
   state: KioskState;
-  dispatch: Dispatch<Parameters<typeof reduce>[1]>;
-  onPay: () => void;
+  dispatch: Dispatch<Action>;
+  venueName: string;
+  menuSlow: boolean;
+  retrySeconds: number;
+  onRetryMenu: () => void;
+  onAssist: () => void;
+  onPrimary: () => void;
+  onStartOver: () => void;
 }) {
-  const items = (state.menu?.items ?? []).filter((item) => item.categoryId === state.categoryId);
-  const pages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
-  const page = Math.min(state.page, pages - 1);
-  const pageItems = items.slice(page * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE + ITEMS_PER_PAGE);
-  const n = cartCount(state.lines);
-  const total = cartTotalCents(state.lines);
-  const category = state.menu?.categories.find((c) => c.id === state.categoryId);
-
-  return (
-    <div className="screen">
-      <Header
-        title="Snack Bar"
-        canLeave={!inPayment(state.payPhase)}
-        apiDown={state.apiDown}
-        dispatch={dispatch}
-      />
-      <div className="body">
-        <section className="menu" aria-label="Menu">
-          <div className="tabs" role="tablist">
-            {(state.menu?.categories ?? []).map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="k tab"
-                role="tab"
-                aria-selected={c.id === state.categoryId}
-                onClick={() => dispatch({ type: 'tab', categoryId: c.id })}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-          <div className="grid">
-            {pageItems.map((item) => {
-              const q = qtyOfItem(state.lines, item.id);
-              if (!item.available) {
-                return (
-                  <button key={item.id} type="button" className="tile soldout" disabled>
-                    <div className="glyph">
-                      <CategoryGlyph categoryId={item.categoryId} />
-                    </div>
-                    <div className="name">{item.name}</div>
-                    <div className="meta">
-                      <span className="tag">Sold out</span>
-                      <span className="price num">{money(item.priceCents)}</span>
-                    </div>
-                  </button>
-                );
-              }
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="tile"
-                  aria-label={`${item.name}, ${money(item.priceCents)}${item.optionGroups.length ? ', has options' : ''}`}
-                  onClick={() => dispatch({ type: 'tile', itemId: item.id })}
-                >
-                  {q ? (
-                    <span className="badge num" role="status">
-                      {q}
-                    </span>
-                  ) : null}
-                  <div className="glyph">
-                    <CategoryGlyph categoryId={item.categoryId} />
-                  </div>
-                  <div className="name">{item.name}</div>
-                  <div className="meta">
-                    <span className="opt">{item.optionGroups.length ? 'Choose options' : 'Tap to add'}</span>
-                    <span className="price num">{money(item.priceCents)}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="pager">
-            {pages > 1 ? (
-              <>
-                <button
-                  type="button"
-                  className="k k-secondary"
-                  disabled={page === 0}
-                  onClick={() => dispatch({ type: 'page', delta: -1 })}
-                >
-                  Previous
-                </button>
-                <span className="where num">
-                  Page {page + 1} of {pages}
-                </span>
-                <button
-                  type="button"
-                  className="k k-secondary"
-                  disabled={page >= pages - 1}
-                  onClick={() => dispatch({ type: 'page', delta: 1 })}
-                >
-                  More {category?.label.toLowerCase() ?? ''}
-                </button>
-              </>
-            ) : (
-              <span />
-            )}
-          </div>
-        </section>
-        <aside className={`panel${state.dockOpen ? ' open' : ''}`} aria-label="Your order">
-          <h2>Your order</h2>
-          <div className="lines">
-            <OrderLines state={state} editable dispatch={dispatch} />
-          </div>
-          <div className="foot">
-            <div className="totalrow">
-              <button
-                type="button"
-                className="k k-quiet dock-toggle"
-                onClick={() => dispatch({ type: 'dock' })}
-              >
-                {state.dockOpen ? 'Hide order' : `View order (${n})`}
-              </button>
-              <span className="cnt num">
-                {n} item{n === 1 ? '' : 's'}
-              </span>
-              <span className="tot num" role="status">
-                {money(total)}
-              </span>
-            </div>
-            <button type="button" className="k k-primary" disabled={n === 0} onClick={onPay}>
-              Review and pay
-            </button>
-          </div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-function CheckoutScreen({
-  state,
-  dispatch,
-  onPay,
-}: {
-  state: KioskState;
-  dispatch: Dispatch<Parameters<typeof reduce>[1]>;
-  onPay: () => void;
-}) {
+  const categories = visibleCategories(state.menu);
+  const category = categories.find((item) => item.id === state.categoryId) ?? categories[0];
+  const items = state.menu?.items.filter((item) => item.categoryId === category?.id) ?? [];
   const locked = inPayment(state.payPhase);
   const total = cartTotalCents(state.lines);
+  const count = cartCount(state.lines);
+  const busy = state.payPhase === 'processing' || state.payPhase === 'checking';
+  const label = primaryLabel(state);
+  const disabled =
+    state.apiDown || busy || (state.screen === 'order' ? count === 0 || !state.menu : !canPay(state));
+
   return (
-    <div className="screen">
-      <Header title="Review and pay" canLeave={!locked} apiDown={state.apiDown} dispatch={dispatch} />
-      <div className="body co-body">
-        <section className="co-order" aria-label="Your order">
-          <h2>Your order</h2>
-          <div className="lines">
-            <OrderLines state={state} editable={false} dispatch={dispatch} />
+    <div className="shell">
+      <aside className="rail">
+        <p className="rail-brand">{venueName}</p>
+        <div className="cats">
+          {categories.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="cat"
+              aria-pressed={item.id === category?.id}
+              onClick={() => dispatch({ type: 'tab', categoryId: item.id })}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="rail-spacer" />
+        {locked ? null : (
+          <button type="button" className="start-over" onClick={onStartOver}>
+            Start over
+          </button>
+        )}
+      </aside>
+      <div className="main">
+        <button type="button" className="assist" onClick={onAssist}>
+          Staff assist
+        </button>
+        {state.apiDown && state.menu ? (
+          <div className="banner" role="status">
+            <WarnIcon size={28} />
+            <span>We can't take payments right now. You can keep browsing.</span>
           </div>
-          <div className="foot">
-            <div className="totalrow">
-              <span className="cnt num">{cartCount(state.lines)} items</span>
-              <span className="tot num">{money(total)}</span>
+        ) : null}
+        {state.screen === 'order' ? (
+          <>
+            <div className="main-head">
+              <h1>{category?.label ?? 'Menu'}</h1>
+              {menuSlow && state.menuStatus === 'loading' ? <p className="hint">Loading the menu…</p> : null}
             </div>
-            {locked ? null : (
-              <button
-                type="button"
-                className="k k-secondary"
-                onClick={() => dispatch({ type: 'edit-order' })}
-              >
-                Edit order
-              </button>
-            )}
-          </div>
-        </section>
-        <section className="co-pay" aria-label="Payment">
-          <PayArea state={state} dispatch={dispatch} onPay={onPay} />
-        </section>
+            {state.menuStatus === 'unavailable' && !state.menu ? (
+              <div className="menu-fail" role="status">
+                <WarnIcon />
+                <h2>We're having trouble loading the menu</h2>
+                <p>{retrySeconds > 0 ? `Trying again in ${retrySeconds}s…` : 'Trying again…'}</p>
+                <button type="button" className="try-now" onClick={onRetryMenu}>
+                  Try now
+                </button>
+              </div>
+            ) : null}
+            {state.menuStatus === 'loading' && !state.menu ? (
+              <div className="grid" aria-hidden="true">
+                {['a', 'b', 'c', 'd', 'e', 'f'].map((key) => (
+                  <div className="skeleton" key={key}>
+                    <div className="sk-tile" />
+                    <div className="sk-bar" />
+                    <div className="sk-bar short" />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {state.menu ? (
+              <div className="grid">
+                {items.map((item) => {
+                  const qty = qtyOfItem(state.lines, item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="item"
+                      disabled={!item.available}
+                      onClick={() => dispatch({ type: 'tile', itemId: item.id })}
+                    >
+                      <span className={`tile tile-${tileIndex(item.id)}`}>
+                        {monogram(item.name)}
+                        {!item.available ? <span className="sold">Sold out</span> : null}
+                        {qty > 0 ? (
+                          <span className="badge bump num" key={qty}>
+                            ×{qty}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="item-body">
+                        <span className="item-name">{item.name}</span>
+                        {item.description ? <span className="item-desc">{item.description}</span> : null}
+                        <span className="item-row">
+                          <span className="price num">{money(item.priceCents)}</span>
+                          <span className="plus" aria-hidden="true">
+                            +
+                          </span>
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <PayMain state={state} dispatch={dispatch} locked={locked} />
+        )}
       </div>
+      <aside className="cart" aria-label="Your order">
+        <div className="cart-head">
+          <h2>Your order</h2>
+          <span className="num">{count === 1 ? '1 item' : `${count} items`}</span>
+        </div>
+        {count === 0 ? <p className="empty">Tap anything on the menu to add it here.</p> : null}
+        <div className="lines">
+          {state.lines.map((line) => {
+            const item = itemById(state.menu, line.itemId);
+            return (
+              <div className={line.key === state.lastAdded ? 'line in' : 'line'} key={line.key}>
+                <div className="line-name">{item?.name ?? 'Item'}</div>
+                <div className="num">{money(line.qty * line.unitPriceCents)}</div>
+                {line.optionLabels.length > 0 ? (
+                  <div className="line-opt">{line.optionLabels.join(', ')}</div>
+                ) : null}
+                {state.screen === 'order' && !locked ? (
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      aria-label="One less"
+                      onClick={() => dispatch({ type: 'line/dec', key: line.key })}
+                    >
+                      −
+                    </button>
+                    <span className="q num">{line.qty}</span>
+                    <button
+                      type="button"
+                      aria-label="One more"
+                      disabled={line.qty >= 10}
+                      onClick={() => dispatch({ type: 'line/inc', key: line.key })}
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+        <div className="foot">
+          <div className="totalrow">
+            <span>Total</span>
+            <span className="num" role="status" aria-live="polite" aria-atomic="true">
+              {money(total)}
+            </span>
+          </div>
+          <button type="button" className="primary" disabled={disabled} aria-busy={busy} onClick={onPrimary}>
+            {busy ? <span className="spinner" aria-hidden="true" /> : null}
+            {label}
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }
 
-function PayArea({
+function PayMain({
   state,
   dispatch,
-  onPay,
+  locked,
 }: {
   state: KioskState;
-  dispatch: Dispatch<Parameters<typeof reduce>[1]>;
-  onPay: () => void;
+  dispatch: Dispatch<Action>;
+  locked: boolean;
 }) {
-  const total = cartTotalCents(state.lines);
-  const p = state.payPhase;
-  if (p === 'totalChanged' && state.priceChange) {
-    const c = state.priceChange;
-    return (
-      <div className="state warn" role="alert">
-        <div className="head">
-          <WarnIcon />
-          <h3>Prices updated</h3>
-        </div>
-        <p style={{ margin: 0 }}>
-          Some prices changed since you started. Check the new total before you pay.
-        </p>
-        <table className="cmp">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th className="r">Was</th>
-              <th className="r">Now</th>
-            </tr>
-          </thead>
-          <tbody>
-            {c.rows.map((row) => (
-              <tr key={`${row.name}-${row.wasCents}`}>
-                <td>
-                  {row.qty} × {row.name}
-                  {row.optionLabels.length ? ` (${row.optionLabels.join(', ')})` : ''}
-                </td>
-                <td className="r num old">{money(row.wasCents * row.qty)}</td>
-                <td className="r num">
-                  <strong>{money(row.nowCents * row.qty)}</strong>
-                </td>
-              </tr>
-            ))}
-            {c.unavailableItemIds.length > 0 ? (
-              <tr>
-                <td colSpan={3}>Some items are no longer available.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-        <div className="totals-cmp">
-          <div className="was">
-            Old total <span className="v num">{money(c.oldTotalCents)}</span>
-          </div>
-          <div className="now">
-            New total <span className="v num">{money(c.newTotalCents)}</span>
-          </div>
-        </div>
-        <div className="grow" />
-        <div className="actions">
-          <button type="button" className="k k-secondary" onClick={() => dispatch({ type: 'edit-order' })}>
-            Back to order
-          </button>
-          <button type="button" className="k k-primary" onClick={() => dispatch({ type: 'accept-price' })}>
-            Pay {money(c.newTotalCents)}
-          </button>
-        </div>
+  const digits = state.cardDigits;
+  return (
+    <>
+      <button
+        type="button"
+        className="back"
+        disabled={locked}
+        onClick={() => dispatch({ type: 'edit-order' })}
+      >
+        Add more
+      </button>
+      <div className="main-head">
+        <h1>How would you like to pay?</h1>
       </div>
-    );
-  }
-  if (p === 'processing') {
-    return (
-      <div className="state neutral" role="status">
-        <div className="head">
-          <div className="spinner" />
-          <h3>Processing payment…</h3>
-        </div>
-        <p style={{ margin: 0 }}>Keep your card on the reader until this screen changes.</p>
-        <div className="amount num">{money(total)}</div>
+      <div className="pay-choices">
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={state.payMode === 'tap'}
+          disabled={locked}
+          onClick={() => dispatch({ type: 'pay/mode', mode: 'tap' })}
+        >
+          Tap card or phone
+        </button>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={state.payMode === 'card'}
+          disabled={locked}
+          onClick={() => dispatch({ type: 'pay/mode', mode: 'card' })}
+        >
+          Enter card number
+        </button>
       </div>
-    );
-  }
-  if (p === 'checking') {
-    return (
-      <div className="state warn" role="alert">
-        <div className="head">
-          <div className="spinner" style={{ color: 'var(--color-warning)' }} />
-          <h3>Checking your payment</h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 'var(--text-item)', fontWeight: 'var(--weight-strong)' }}>
-          Please don&apos;t pay again.
-        </p>
-        <p style={{ margin: 0 }}>We&apos;re confirming with the bank. This can take up to 30 seconds.</p>
-      </div>
-    );
-  }
-  if (p === 'unresolved') {
-    return (
-      <div className="state warn" role="alert">
-        <div className="head">
-          <WarnIcon />
-          <h3>We couldn&apos;t confirm your payment</h3>
-        </div>
-        <p style={{ margin: 0 }}>
-          You have not been asked to pay twice. If your card was charged, show this code at the counter and
-          we&apos;ll sort it out.
-        </p>
-        <div className="code num">{state.unresolvedCode}</div>
-        <div className="grow" />
-        <div className="actions">
-          <button
-            type="button"
-            className="k k-primary"
-            onClick={() => dispatch({ type: 'start-over/confirm' })}
-          >
-            Start a new order
-          </button>
-        </div>
-      </div>
-    );
-  }
-  if (p === 'declined') {
-    return (
-      <div className="state err" role="alert">
-        <div className="head">
-          <ErrorIcon />
-          <h3>Card not accepted</h3>
-        </div>
-        <p style={{ margin: 0 }}>
-          You have not been charged. Your order is saved. Try another card or phone.
-        </p>
-        <div className="grow" />
-        <div className="actions">
-          <button type="button" className="k k-secondary" onClick={() => dispatch({ type: 'edit-order' })}>
-            Back to order
-          </button>
-          <button type="button" className="k k-primary" onClick={() => dispatch({ type: 'pay/retry' })}>
-            Try another card
-          </button>
-        </div>
-      </div>
-    );
-  }
-  if (state.apiDown) {
-    return (
-      <>
-        <div>
-          <div className="amount-label">Amount to pay</div>
-          <div className="amount num">{money(total)}</div>
-        </div>
-        <div className="state neutral">
-          <div className="head">
-            <WarnIcon />
-            <h3>Payment is unavailable right now</h3>
-          </div>
-          <p style={{ margin: 0 }}>
-            Your order is saved. Payment will come back on its own. You can keep this screen open or edit your
-            order.
+      {state.payMode === 'tap' ? (
+        <div className="tap-panel">
+          <ReaderIcon />
+          <h2>Ready when you are</h2>
+          <p>
+            Press Pay, then follow the card reader below the screen. If you insert a card, keep it in until
+            this screen says you're done.
           </p>
         </div>
-        <div className="pay-actions">
-          <span />
-          <button type="button" className="k k-primary" disabled>
-            Payment unavailable
-          </button>
-        </div>
-      </>
-    );
-  }
-  if (state.payMode === 'card') {
-    const d = state.cardDigits;
-    const grouped = d.replace(/(.{4})/g, '$1 ').trim();
-    return (
-      <>
-        <div>
-          <div className="amount-label">Amount to pay</div>
-          <div className="amount num">{money(total)}</div>
-        </div>
-        <div className="numpad-wrap">
-          <div className="numpad-left">
-            <div className="cardfield num" role="status">
-              {d ? grouped : <span className="ph">Card number, 16 digits</span>}
-            </div>
-            <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>
-              {CARD_NUMBER_DIGITS - d.length
-                ? `${CARD_NUMBER_DIGITS - d.length} digits to go`
-                : 'Ready to pay'}
-            </p>
+      ) : (
+        <>
+          <div className="card-mask num" role="status" aria-live="polite" aria-atomic="true">
+            {maskDigits(digits)}
           </div>
+          <p className="digits">Digits {digits.length} of 16</p>
           <div className="numpad">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => (
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
               <button
-                key={k}
+                key={digit}
                 type="button"
-                className="k num"
-                onClick={() => dispatch({ type: 'pay/digit', digit: String(k) })}
+                className="num"
+                disabled={locked || digits.length >= 16}
+                onClick={() => dispatch({ type: 'pay/digit', digit })}
               >
-                {k}
+                {digit}
               </button>
             ))}
-            <span />
             <button
               type="button"
-              className="k num"
+              className="texty"
+              disabled={locked}
+              onClick={() => dispatch({ type: 'pay/clear' })}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="num"
+              disabled={locked || digits.length >= 16}
               onClick={() => dispatch({ type: 'pay/digit', digit: '0' })}
             >
               0
             </button>
             <button
               type="button"
-              className="k del"
               aria-label="Delete last digit"
+              disabled={locked}
               onClick={() => dispatch({ type: 'pay/delete' })}
             >
-              Delete
+              <DeleteIcon />
             </button>
           </div>
-        </div>
-        <div className="pay-actions">
-          <button
-            type="button"
-            className="k k-secondary"
-            onClick={() => dispatch({ type: 'pay/mode', mode: 'tap' })}
-          >
-            Tap card instead
-          </button>
-          <button type="button" className="k k-primary" disabled={!canPay(state)} onClick={onPay}>
-            Pay {money(total)}
-          </button>
-        </div>
-      </>
-    );
-  }
-  return (
-    <>
-      <div>
-        <div className="amount-label">Amount to pay</div>
-        <div className="amount num">{money(total)}</div>
-      </div>
-      <button type="button" className="tapzone" onClick={onPay}>
-        <div>
-          <div className="big">
-            Tap your card or phone
-            <br />
-            on the reader
-          </div>
-          <div className="small">The reader is to the right of this screen.</div>
-        </div>
-        <span className="arrow">
-          <ArrowIcon />
-        </span>
-      </button>
-      <div className="pay-actions">
-        <button
-          type="button"
-          className="k k-secondary"
-          onClick={() => dispatch({ type: 'pay/mode', mode: 'card' })}
-        >
-          Enter card number instead
-        </button>
-        <span />
-      </div>
+        </>
+      )}
     </>
   );
 }
 
-function DoneScreen({ pickupNumber, onDone }: { pickupNumber: string; onDone: () => void }) {
-  return (
-    <div className="screen done" role="status">
-      <div className="ok">
-        <OkIcon />
-      </div>
-      <h1>Paid. Thank you!</h1>
-      <div>
-        <div className="sub">Your order number</div>
-        <div className="ordno num">{pickupNumber}</div>
-      </div>
-      <div className="sub">Pick it up at the counter when your number is called.</div>
-      <button type="button" className="k k-primary" style={{ minWidth: 280 }} onClick={onDone}>
-        Done
-      </button>
-    </div>
-  );
-}
-
-function OptionSheet({
-  state,
-  dispatch,
-}: {
-  state: KioskState;
-  dispatch: Dispatch<Parameters<typeof reduce>[1]>;
-}) {
+function OptionSheet({ state, dispatch }: { state: KioskState; dispatch: Dispatch<Action> }) {
   const sheet = state.sheet;
   if (!sheet) return null;
   const item = itemById(state.menu, sheet.itemId);
@@ -952,40 +810,35 @@ function OptionSheet({
         <div className="top">
           <div>
             <h2>{item.name}</h2>
-            <div className="num" style={{ color: 'var(--color-text-muted)' }}>
-              From {money(item.priceCents)}
-            </div>
+            <div className="num">{money(item.priceCents)}</div>
           </div>
-          <button type="button" className="k k-quiet" onClick={() => dispatch({ type: 'sheet/close' })}>
+          <button type="button" className="secondary" onClick={() => dispatch({ type: 'sheet/close' })}>
             Cancel
           </button>
         </div>
         {item.optionGroups.map((group) => (
           <div className="group" key={group.id}>
             <div className="gl">{group.name}</div>
-            <div className="choices">
-              {group.choices.map((choice) => (
-                <button
-                  key={choice.id}
-                  type="button"
-                  className="k choice"
-                  aria-pressed={sheet.choiceIds.includes(choice.id)}
-                  onClick={() => dispatch({ type: 'sheet/choose', groupId: group.id, choiceId: choice.id })}
-                >
-                  <span>{choice.label}</span>
-                  <span className="num">{choice.deltaCents ? `+${money(choice.deltaCents)}` : ''}</span>
-                </button>
-              ))}
-            </div>
+            {group.choices.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                className="opt"
+                aria-pressed={sheet.choiceIds.includes(choice.id)}
+                onClick={() => dispatch({ type: 'sheet/choose', groupId: group.id, choiceId: choice.id })}
+              >
+                <span>{choice.label}</span>
+                <span className="num">{choice.deltaCents ? `+${money(choice.deltaCents)}` : ''}</span>
+              </button>
+            ))}
           </div>
         ))}
         <div className="bottom">
-          <div className="stepper" style={{ gridColumn: 'auto' }}>
+          <div className="stepper">
             <button
               type="button"
-              className="k k-quiet"
-              disabled={sheet.qty <= 1}
               aria-label="One less"
+              disabled={sheet.qty <= 1}
               onClick={() => dispatch({ type: 'sheet/qty', delta: -1 })}
             >
               −
@@ -993,15 +846,14 @@ function OptionSheet({
             <span className="q num">{sheet.qty}</span>
             <button
               type="button"
-              className="k k-quiet"
-              disabled={sheet.qty >= 10}
               aria-label="One more"
+              disabled={sheet.qty >= 10}
               onClick={() => dispatch({ type: 'sheet/qty', delta: 1 })}
             >
               +
             </button>
           </div>
-          <button type="button" className="k k-primary" onClick={() => dispatch({ type: 'sheet/add' })}>
+          <button type="button" className="primary" onClick={() => dispatch({ type: 'sheet/add' })}>
             Add · <span className="num">{money(price)}</span>
           </button>
         </div>
@@ -1010,26 +862,127 @@ function OptionSheet({
   );
 }
 
-function HelpDialog({ onClose }: { onClose: () => void }) {
+function StatusDialog({ phase }: { phase: 'processing' | 'checking' }) {
   return (
-    <div className="scrim center">
-      <div className="dialog" role="dialog" aria-label="Help">
-        <h2>How this works</h2>
-        <ol>
-          <li>
-            <strong>Order:</strong> tap items to add them. Your order and total stay on the right.
-          </li>
-          <li>
-            <strong>Pay:</strong> tap your card or phone on the reader, or type your card number.
-          </li>
-          <li>
-            <strong>If a payment fails:</strong> you&apos;re never charged twice. The screen tells you what to
-            do next.
-          </li>
-        </ol>
+    <div className="scrim">
+      <div className="dialog" role="status">
+        <span className="spinner wait" aria-hidden="true" />
+        <h2>{phase === 'checking' ? 'Checking your payment…' : 'Processing payment…'}</h2>
+        <p>Please don't pay again. This takes a few seconds.</p>
+      </div>
+    </div>
+  );
+}
+
+function DeclinedDialog({
+  second,
+  onRetry,
+  onOther,
+  onAssist,
+}: {
+  second: boolean;
+  onRetry: () => void;
+  onOther: () => void;
+  onAssist: () => void;
+}) {
+  return (
+    <Dialog
+      tone="err"
+      title="Payment declined"
+      primary="Try again"
+      onPrimary={onRetry}
+      secondary={second ? 'Get staff help' : 'Use another card'}
+      onSecondary={second ? onAssist : onOther}
+    >
+      <p>Your card was not charged. Your order is saved, so you can try again or use another card.</p>
+    </Dialog>
+  );
+}
+
+function TotalDialog({ state, onPay, onEdit }: { state: KioskState; onPay: () => void; onEdit: () => void }) {
+  const change = state.priceChange;
+  if (!change) return null;
+  return (
+    <Dialog
+      tone="warn"
+      title="Your total changed"
+      primary="Pay new total"
+      onPrimary={onPay}
+      secondary="Edit order"
+      onSecondary={onEdit}
+    >
+      <p>A price changed since you started. Nothing has been charged yet. Please check the new total.</p>
+      <table className="changes">
+        <tbody>
+          {change.rows.map((row) => (
+            <tr key={`${row.name}-${row.wasCents}`}>
+              <td>
+                {row.qty} × {row.name}
+              </td>
+              <td className="r num old">{money(row.wasCents * row.qty)}</td>
+              <td className="r num">{money(row.nowCents * row.qty)}</td>
+            </tr>
+          ))}
+          {change.unavailableItemIds.map((id) => (
+            <tr key={id}>
+              <td colSpan={3}>{itemById(state.menu, id)?.name ?? 'An item'} is sold out</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="new-total">
+        <span>New total</span>
+        <span className="num">{money(change.newTotalCents)}</span>
+      </div>
+    </Dialog>
+  );
+}
+
+function PaymentsDownDialog({ onRetry, onStartOver }: { onRetry: () => void; onStartOver: () => void }) {
+  return (
+    <Dialog
+      tone="warn"
+      title="We can't take payments right now"
+      primary="Try again"
+      onPrimary={onRetry}
+      secondary="Start over"
+      onSecondary={onStartOver}
+    >
+      <p>Your order is still here. Please try again in a moment.</p>
+    </Dialog>
+  );
+}
+
+function UnresolvedDialog({ code, onDone }: { code: string; onDone: () => void }) {
+  return (
+    <Dialog
+      tone="warn"
+      title="We couldn't confirm your payment"
+      primary="Start a new order"
+      onPrimary={onDone}
+    >
+      <p>
+        You have not been asked to pay twice. If your card was charged, show this code at the counter and
+        we'll sort it out.
+      </p>
+      <div className="code num">{code}</div>
+    </Dialog>
+  );
+}
+
+function AssistDialog({ onWait }: { onWait: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return (
+    <div className="scrim">
+      <div className="dialog" role="dialog" aria-labelledby="assist-title">
+        <h2 id="assist-title">Help is on the way</h2>
+        <p>A team member has been notified and will come to this screen. Your order is saved.</p>
         <div className="actions">
-          <button type="button" className="k k-primary" onClick={onClose}>
-            Got it
+          <button ref={ref} type="button" className="primary" onClick={onWait}>
+            OK, I'll wait
           </button>
         </div>
       </div>
@@ -1039,20 +992,16 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
 
 function ConfirmStartOver({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
   return (
-    <div className="scrim center">
-      <div className="dialog" role="alertdialog" aria-label="Start over">
-        <h2>Start over?</h2>
-        <p style={{ margin: 0 }}>Your order will be cleared.</p>
-        <div className="actions">
-          <button type="button" className="k k-secondary" onClick={onYes}>
-            Start over
-          </button>
-          <button type="button" className="k k-primary" onClick={onNo}>
-            Keep ordering
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog
+      tone="warn"
+      title="Start over?"
+      primary="Keep ordering"
+      onPrimary={onNo}
+      secondary="Start over"
+      onSecondary={onYes}
+    >
+      <p>Your order will be cleared.</p>
+    </Dialog>
   );
 }
 
@@ -1066,20 +1015,127 @@ function StillThere({
   onReset: () => void;
 }) {
   return (
-    <div className="scrim center">
-      <div className="dialog" role="alertdialog" aria-label="Are you still there?">
-        <h2>Still there?</h2>
-        <p style={{ margin: 0 }}>Your order will be cleared in</p>
-        <div className="count num">{seconds}s</div>
+    <div className="scrim idle">
+      <div className="dialog" role="alertdialog" aria-labelledby="idle-title">
+        <div className="ring" style={{ ['--p' as string]: String(seconds / 10) }}>
+          <span className="num" aria-live="polite">
+            {seconds}
+          </span>
+        </div>
+        <h2 id="idle-title">Are you still there?</h2>
+        <p>We'll clear this order for the next person if nobody taps.</p>
         <div className="actions">
-          <button type="button" className="k k-secondary" onClick={onReset}>
+          <button type="button" className="secondary" onClick={onReset}>
             Start over
           </button>
-          <button type="button" className="k k-primary" onClick={onKeep}>
-            Keep ordering
-          </button>
+          <FocusPrimary label="I'm still here" onClick={onKeep} />
         </div>
       </div>
     </div>
   );
+}
+
+function DoneScreen({ state, seconds, onDone }: { state: KioskState; seconds: number; onDone: () => void }) {
+  const receipt = state.receipt;
+  const detail =
+    receipt?.method === 'card' && receipt.last4
+      ? `Card ending ${receipt.last4} · ${money(receipt.totalCents)}`
+      : `Paid by tap · ${money(receipt?.totalCents ?? 0)}`;
+  return (
+    <div className="done" role="status">
+      <div className="check">
+        <OkIcon size={48} />
+      </div>
+      <h1>Paid. Your order number is</h1>
+      <p className="ordno num">{state.pickupNumber}</p>
+      <p className="sub">We'll call it at the counter. {detail}</p>
+      <button type="button" className="secondary" onClick={onDone}>
+        <span className="num" aria-live="polite">
+          Done · next order in {seconds}s
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function Dialog({
+  tone,
+  title,
+  primary,
+  onPrimary,
+  secondary,
+  onSecondary,
+  children,
+}: {
+  tone: 'warn' | 'err';
+  title: string;
+  primary: string;
+  onPrimary: () => void;
+  secondary?: string;
+  onSecondary?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="scrim">
+      <div className="dialog" role="alertdialog" aria-labelledby="dialog-title">
+        <div className={`icon ${tone}`}>
+          {tone === 'err' ? <ErrorIcon size={34} /> : <WarnIcon size={34} />}
+        </div>
+        <h2 id="dialog-title">{title}</h2>
+        {children}
+        <div className="actions">
+          {secondary && onSecondary ? (
+            <button type="button" className="secondary" onClick={onSecondary}>
+              {secondary}
+            </button>
+          ) : null}
+          <FocusPrimary label={primary} onClick={onPrimary} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FocusPrimary({ label, onClick }: { label: string; onClick: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return (
+    <button ref={ref} type="button" className="primary" onClick={onClick}>
+      {label}
+    </button>
+  );
+}
+
+function primaryLabel(state: KioskState): string {
+  if (state.payPhase === 'processing' || state.payPhase === 'checking') return 'Processing…';
+  if (state.apiDown) return 'Payments paused';
+  if (state.screen === 'checkout') return `Pay ${money(cartTotalCents(state.lines))}`;
+  return 'Review and pay';
+}
+
+function visibleCategories(menu: Menu | null) {
+  if (!menu) return [];
+  return menu.categories.filter((category) =>
+    menu.items.some((item) => item.categoryId === category.id && item.available),
+  );
+}
+
+function monogram(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? '';
+  const second = parts[1]?.[0] ?? parts[0]?.[1] ?? '';
+  return `${first}${second}`.toUpperCase();
+}
+
+function tileIndex(id: string): number {
+  let total = 0;
+  for (const char of id) total += char.charCodeAt(0);
+  return total % 6;
+}
+
+function maskDigits(digits: string): string {
+  const padded = `${digits}${'•'.repeat(CARD_NUMBER_DIGITS)}`.slice(0, CARD_NUMBER_DIGITS);
+  return `${padded.slice(0, 4)} ${padded.slice(4, 8)} ${padded.slice(8, 12)} ${padded.slice(12)}`;
 }

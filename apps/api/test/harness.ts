@@ -2,6 +2,7 @@ import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { buildApp, loggerRedact, loggerSerializers } from '../src/app.ts';
 import { type Db, openDatabase, readSeed, seedMenu } from '../src/db/database.ts';
+import { resetSimulation } from '../src/ops/simulation.ts';
 import type { PaymentGateway } from '../src/orders/payment.ts';
 
 const SEED_PATH = fileURLToPath(new URL('../seed/menu.json', import.meta.url));
@@ -31,12 +32,15 @@ export function captureLog() {
   };
 }
 
-export function createTestApp(options: { payments?: PaymentGateway; captureLogs?: boolean } = {}) {
+export function createTestApp(
+  options: { payments?: PaymentGateway; captureLogs?: boolean; failRate?: number } = {},
+) {
+  resetSimulation();
   const db = openTestDb();
   const captured = options.captureLogs ? captureLog() : null;
   const app = buildApp({
     db,
-    config: { CHAOS_LATENCY_MS: 0, CHAOS_FAIL_RATE: 0, PAYMENT_SLOW_MS: 40 },
+    config: { CHAOS_LATENCY_MS: 0, CHAOS_FAIL_RATE: options.failRate ?? 0, PAYMENT_SLOW_MS: 40 },
     payments: options.payments,
     logger: captured?.logger ?? false,
   });

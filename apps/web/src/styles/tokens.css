@@ -1,55 +1,108 @@
 :root {
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --text-label: 18px;
-  --text-body: 20px;
-  --text-item: 24px;
-  --text-heading: 32px;
-  --text-total: 40px;
-  --text-display: 56px;
-  --weight-regular: 500;
-  --weight-strong: 700;
-  --leading-body: 1.35;
-  --leading-tight: 1.1;
+  /* color: neutrals */
+  --ink: #1b1d1f;
+  --ground: #ffffff;
+  --panel: #f5f3ef;
+  --line: #e2ded6;
+  --line-soft: #ece8e1;
+  --line-faint: #f0ede7;
+  --line-strong: #d6d3d1;
+  --muted: #57534e;
+  --muted-strong: #44403c;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 48px;
+  /* color: venue theme (overridable per venue from GET /menu) */
+  --accent: #c2410c;
+  --accent-tint: color-mix(in srgb, var(--accent) 10%, #ffffff);
+  --accent-ink: color-mix(in srgb, var(--accent) 80%, #000000);
+  --on-accent: #ffffff;
+  --highlight: #fdba74;
 
-  --target-min: 56px;
-  --target-primary: 72px;
-  --target-numpad: 80px;
-  --tile-min: 160px;
+  /* color: status */
+  --success: #15803d;
+  --error-tint: #fee2e2;
+  --error-ink: #b91c1c;
+  --warn-tint: #fef3c7;
+  --warn-ink: #92400e;
+  --disabled-bg: #e7e5e4;
+  --disabled-fg: #57534e;
+  --focus: #1d4ed8;
+  --scrim: rgba(27, 29, 31, 0.72);
+  --scrim-strong: rgba(27, 29, 31, 0.78);
 
-  --color-bg: #f5f4f0;
-  --color-surface: #ffffff;
-  --color-text: #14161a;
-  --color-text-muted: #4a4f57;
-  --color-action: #14161a;
-  --color-accent: #1d4ed8;
-  --color-success: #1e7a3c;
-  --color-warning: #8a5a00;
-  --color-warning-surface: #fff4d6;
-  --color-error: #b3261e;
-  --color-error-surface: #fdecea;
-  --color-disabled-surface: #e4e3de;
-  --color-disabled-text: #5c6169;
-  --color-border: #d6d4ce;
+  /* placeholder tiles, mixed from the neutrals so components stay hex-free */
+  --tile-0: var(--panel);
+  --tile-1: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  --tile-2: color-mix(in srgb, var(--highlight) 45%, var(--panel));
+  --tile-3: color-mix(in srgb, var(--ink) 8%, var(--panel));
+  --tile-4: color-mix(in srgb, var(--accent) 22%, var(--ground));
+  --tile-5: color-mix(in srgb, var(--highlight) 70%, var(--ground));
 
-  --radius-control: 8px;
-  --radius-card: 16px;
-  --radius-pill: 999px;
+  /* type */
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --fs-xs: 15px;
+  --fs-sm: 16px;
+  --fs-base: 18px;
+  --fs-md: 20px;
+  --fs-lg: 22px;
+  --fs-xl: 26px;
+  --fs-2xl: 30px;
+  --fs-3xl: 40px;
+  --fs-brand: 28px;
+  --fs-dialog: 36px;
+  --fs-display: 96px;
+  --fs-order-no: 168px;
+  --lh-tight: 1.1;
+  --lh-body: 1.45;
 
-  --duration-press: 120ms;
-  --duration-state: 200ms;
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  /* spacing: 4px base */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 28px;
+  --sp-8: 36px;
+  --sp-9: 44px;
+  --sp-10: 56px;
+
+  /* sizing */
+  --rail-w: 220px;
+  --cart-w: 380px;
+  --tap-min: 56px;
+  --tap-lg: 76px;
+  --tap-xl: 84px;
+  --cat-h: 72px;
+
+  /* radius */
+  --r-sm: 14px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* elevation: flat UI, only dialogs float */
+  --shadow-dialog: 0 24px 64px rgba(27, 29, 31, 0.28);
+  --shadow-sheet: 0 -8px 32px rgba(27, 29, 31, 0.12);
+
+  /* motion */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* layers */
+  --z-banner: 10;
+  --z-sheet: 20;
+  --z-dialog: 40;
+  --z-idle: 50;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --duration-press: 0ms;
-    --duration-state: 0ms;
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
   }
 }

@@ -10,3 +10,5 @@
 - **Pickup number**: short and human (`A-042`), unique per day, shown big on the done screen.
 - **Checkout attempt**: from the first Pay tap until the order is paid, declined, or abandoned.
 - **Needs attention**: any screen that replaces the payment area when reality didn't cooperate: payment unknown, total changed, declined, API down.
+- **Venue**: the name and accent returned with the menu. The kiosk shows that name. The accent is used only when white text on it stays readable.
+- **Staff assist**: a request from the kiosk (`POST /kiosk/assist`) that shows up on the counter page. Idle waits while one is open.

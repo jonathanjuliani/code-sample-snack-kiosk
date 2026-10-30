@@ -1,5 +1,6 @@
 import type { CartLine } from './machine';
 
+// Card digits stay in component state only. This module never reads or writes them.
 const CART_KEY = 'kiosk.cart';
 const ATTEMPT_KEY = 'kiosk.attempt';
 const MENU_KEY = 'kiosk.menu';
@@ -11,7 +12,16 @@ export type StoredAttempt = {
 
 export function readKioskId(): string {
   const params = new URLSearchParams(window.location.search);
-  return params.get('kiosk') ?? params.get('kioskId') ?? 'kiosk-1';
+  return params.get('kiosk') ?? params.get('kioskId') ?? 'counter-1';
+}
+
+/** `?idle=` is a demo override, in seconds. Out-of-range values keep the default. */
+export function readIdleMs(fallbackMs: number): number {
+  const raw = new URLSearchParams(window.location.search).get('idle');
+  if (!raw) return fallbackMs;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 1 || seconds > 600) return fallbackMs;
+  return Math.round(seconds * 1000);
 }
 
 export function saveCart(lines: CartLine[]): void {

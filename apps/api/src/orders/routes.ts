@@ -6,13 +6,15 @@ import {
   type OrderChanged,
   type OrderRequest,
   orderRequestSchema,
+  type PaymentSimulation,
   type PendingOrder,
 } from '@kiosk/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { Db } from '../db/database.ts';
 import { issuesFrom, sendInvalid } from '../http.ts';
-import { loadMenu } from '../menu/menu-repository.ts';
+import { readSimulation, servedMenu } from '../ops/simulation.ts';
+import { bumpCounter } from '../ops/store.ts';
 import type { OrderRepository, StoredOrder } from './order-repository.ts';
 import { toOrderState } from './order-repository.ts';
 import type { PaymentGateway } from './payment.ts';
@@ -33,7 +35,8 @@ export function requestHash(body: OrderRequest): string {
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
-function replay(reply: FastifyReply, order: StoredOrder): FastifyReply {
+function replay(db: Db, reply: FastifyReply, order: StoredOrder): FastifyReply {
+  bumpCounter(db, 'idempotentReplays');
   if (!order.response) {
     const pending: PendingOrder = { orderId: order.id, status: 'pending_payment' };
     return reply.status(202).send(pending);
@@ -42,11 +45,31 @@ function replay(reply: FastifyReply, order: StoredOrder): FastifyReply {
   return reply.status(statusCode).header('idempotent-replayed', 'true').send(order.response.body);
 }
 
+/** The order is already stored. Destroy the socket so the kiosk sees a drop, not an error body. */
+function dropCommittedResponse(reply: FastifyReply): void {
+  reply.hijack();
+  const raw = reply.raw;
+  raw.on('error', () => {});
+  if (!raw.destroyed) raw.destroy();
+}
+
+function chaosDrops(failRate: number): boolean {
+  return failRate > 0 && Math.random() < failRate;
+}
+
+/** A chosen simulation result is certain. Fail-rate still applies only when the card decides. */
+function shouldDrop(mode: PaymentSimulation, failRate: number): boolean {
+  if (mode === 'drop-approved' || mode === 'drop-declined') return true;
+  if (mode === 'follow-card') return chaosDrops(failRate);
+  return false;
+}
+
 export function registerOrderRoutes(
   app: FastifyInstance,
-  deps: { db: Db; orders: OrderRepository; payments: PaymentGateway },
+  deps: { db: Db; orders: OrderRepository; payments: PaymentGateway; failRate?: number },
 ): void {
   const { db, orders, payments } = deps;
+  const failRate = deps.failRate ?? 0;
 
   app.post('/orders', async (request, reply) => {
     const keyResult = idempotencyKeySchema.safeParse(request.headers[IDEMPOTENCY_KEY_HEADER]);
@@ -76,10 +99,10 @@ export function registerOrderRoutes(
         });
       }
       log.info({ orderId: existing.id, status: existing.status }, 'order replayed');
-      return replay(reply, existing);
+      return replay(db, reply, existing);
     }
 
-    const menu = loadMenu(db);
+    const menu = servedMenu(db);
     const priced = priceOrder(menu.items, body.lines);
     if (priced.kind === 'invalid') return sendInvalid(request, reply, priced.issues);
 
@@ -96,6 +119,7 @@ export function registerOrderRoutes(
         { clientTotalCents: body.clientTotalCents, totalCents: priced.totalCents },
         'order changed since menu load',
       );
+      bumpCounter(db, 'reprices');
       return reply.status(409).send(changed);
     }
 
@@ -116,9 +140,16 @@ export function registerOrderRoutes(
       const raced = orders.findByKey(idempotencyKey);
       if (raced) {
         log.info({ orderId: raced.id, status: raced.status }, 'order replayed after insert race');
-        return replay(reply, raced);
+        return replay(db, reply, raced);
       }
       throw error;
+    }
+
+    const mode = readSimulation().payment;
+    if (mode === 'unresolved') {
+      log.warn({ orderId }, 'simulation left the payment unresolved');
+      dropCommittedResponse(reply);
+      return reply;
     }
 
     const result = await payments.charge(body.payment, priced.totalCents);
@@ -132,6 +163,17 @@ export function registerOrderRoutes(
       };
       orders.markFailed({ id: orderId, paymentRef: result.reference, body: failed });
       log.info({ orderId, totalCents: priced.totalCents, status: 'payment_failed' }, 'order declined');
+      bumpCounter(db, 'declines');
+      if (shouldDrop(mode, failRate)) {
+        log.warn(
+          { orderId },
+          mode === 'follow-card'
+            ? 'chaos dropped the response after commit'
+            : 'simulation dropped the response after commit',
+        );
+        dropCommittedResponse(reply);
+        return reply;
+      }
       return reply.status(402).send(failed);
     }
 
@@ -152,6 +194,16 @@ export function registerOrderRoutes(
       { orderId, totalCents: paid.totalCents, pickupNumber: paid.pickupNumber, status: 'paid' },
       'order paid',
     );
+    if (shouldDrop(mode, failRate)) {
+      log.warn(
+        { orderId },
+        mode === 'follow-card'
+          ? 'chaos dropped the response after commit'
+          : 'simulation dropped the response after commit',
+      );
+      dropCommittedResponse(reply);
+      return reply;
+    }
     return reply.status(201).send(paid);
   });
 

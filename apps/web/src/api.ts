@@ -1,13 +1,20 @@
 import {
   type ApiError,
+  healthResponseSchema,
   IDEMPOTENCY_KEY_HEADER,
   type Menu,
   menuSchema,
+  type OpsEvent,
+  type OpsSummary,
   type OrderChanged,
   type OrderRequest,
   type OrderState,
+  opsSummarySchema,
   orderChangedSchema,
   orderStateSchema,
+  type Simulation,
+  type SimulationResponse,
+  simulationResponseSchema,
 } from '@kiosk/shared';
 
 export type SubmitResult =
@@ -46,12 +53,17 @@ export async function fetchMenu(signal?: AbortSignal): Promise<Menu> {
   }
 }
 
-export async function fetchHealth(): Promise<boolean> {
+export type HealthReport = 'up' | 'down' | 'payments-paused';
+
+export async function fetchHealth(): Promise<HealthReport> {
   try {
     const res = await fetch(`${API}/health`);
-    return res.ok;
+    if (!res.ok) return 'down';
+    const parsed = healthResponseSchema.safeParse(await parseJson(res));
+    if (!parsed.success) return 'down';
+    return parsed.data.payments === 'down' ? 'payments-paused' : 'up';
   } catch {
-    return false;
+    return 'down';
   }
 }
 
@@ -100,5 +112,52 @@ export async function lookupAttempt(key: string): Promise<OrderState | null> {
     return orderStateSchema.parse(await parseJson(res));
   } catch {
     throw new ApiDownError();
+  }
+}
+
+export async function fetchOpsSummary(): Promise<OpsSummary> {
+  const res = await fetch(`${API}/ops/summary`);
+  if (!res.ok) throw new ApiDownError();
+  return opsSummarySchema.parse(await parseJson(res));
+}
+
+export async function fetchSimulation(): Promise<SimulationResponse> {
+  const res = await fetch(`${API}/ops/simulation`);
+  if (!res.ok) throw new ApiDownError();
+  return simulationResponseSchema.parse(await parseJson(res));
+}
+
+export async function putSimulation(body: Simulation): Promise<SimulationResponse> {
+  const res = await fetch(`${API}/ops/simulation`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiDownError();
+  return simulationResponseSchema.parse(await parseJson(res));
+}
+
+/** A missed heartbeat, idle report, or staff-assist call must not interrupt the customer. */
+export async function postAssist(kioskId: string): Promise<void> {
+  try {
+    await fetch(`${API}/kiosk/assist`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kioskId }),
+    });
+  } catch {
+    // The dialog still tells the customer that help was asked for.
+  }
+}
+
+export async function postOpsEvent(event: OpsEvent): Promise<void> {
+  try {
+    await fetch(`${API}/ops/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(event),
+    });
+  } catch {
+    // The kiosk keeps serving. The counter page shows the last event that landed.
   }
 }

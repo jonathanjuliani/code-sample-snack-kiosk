@@ -8,10 +8,9 @@ import {
 } from '@kiosk/shared';
 
 export const TIMEOUTS = {
-  idleOrderMs: 60_000,
-  idleCheckoutMs: 90_000,
-  stillThereMs: 15_000,
-  doneResetMs: 12_000,
+  idleMs: 60_000,
+  stillThereMs: 10_000,
+  doneResetMs: 8_000,
   paymentCheckLimitMs: 30_000,
   unresolvedResetMs: 60_000,
   menuBackoffMs: [800, 1600, 3200, 5000],
@@ -48,7 +47,9 @@ export type KioskState = {
   page: number;
   lines: CartLine[];
   sheet: { itemId: string; choiceIds: string[]; qty: number } | null;
-  help: boolean;
+  assistActive: boolean;
+  assistDialog: boolean;
+  declineCount: number;
   confirmStartOver: boolean;
   stillThereUntil: number | null;
   dockOpen: boolean;
@@ -57,6 +58,7 @@ export type KioskState = {
   payPhase: PayPhase;
   priceChange: PriceChange | null;
   pickupNumber: string | null;
+  receipt: { method: 'card' | 'tap'; last4: string | null; totalCents: number } | null;
   unresolvedCode: string | null;
   lastAdded: string | null;
   menu: Menu | null;
@@ -88,15 +90,23 @@ export type Action =
   | { type: 'pay/mode'; mode: PayMode }
   | { type: 'pay/digit'; digit: string }
   | { type: 'pay/delete' }
+  | { type: 'pay/clear' }
   | { type: 'pay/lock'; key: string }
   | { type: 'pay/checking' }
-  | { type: 'pay/paid'; pickupNumber: string }
+  | {
+      type: 'pay/paid';
+      pickupNumber: string;
+      method?: 'card' | 'tap';
+      last4?: string | null;
+      totalCents?: number;
+    }
   | { type: 'pay/declined' }
   | { type: 'pay/changed'; changed: OrderChanged }
   | { type: 'pay/unresolved'; code: string }
   | { type: 'pay/retry' }
-  | { type: 'help/open' }
-  | { type: 'help/close' }
+  | { type: 'pay/other-card' }
+  | { type: 'assist/open' }
+  | { type: 'assist/wait' }
   | { type: 'start-over/ask' }
   | { type: 'start-over/confirm' }
   | { type: 'start-over/cancel' }
@@ -161,10 +171,9 @@ export function canPay(state: KioskState): boolean {
   return true;
 }
 
-export function idleLimitMs(state: KioskState): number | null {
-  if (state.stillThereUntil || inPayment(state.payPhase)) return null;
-  if (state.screen === 'order') return TIMEOUTS.idleOrderMs;
-  if (state.screen === 'checkout') return TIMEOUTS.idleCheckoutMs;
+export function idleLimitMs(state: KioskState, idleMs: number = TIMEOUTS.idleMs): number | null {
+  if (state.assistActive || state.stillThereUntil || inPayment(state.payPhase)) return null;
+  if (state.screen === 'order' || state.screen === 'checkout') return idleMs;
   return null;
 }
 
@@ -183,7 +192,9 @@ export function createInitialState(): KioskState {
     page: 0,
     lines: [],
     sheet: null,
-    help: false,
+    assistActive: false,
+    assistDialog: false,
+    declineCount: 0,
     confirmStartOver: false,
     stillThereUntil: null,
     dockOpen: false,
@@ -192,6 +203,7 @@ export function createInitialState(): KioskState {
     payPhase: 'idle',
     priceChange: null,
     pickupNumber: null,
+    receipt: null,
     unresolvedCode: null,
     lastAdded: null,
     menu: null,
@@ -220,7 +232,6 @@ export function reduce(state: KioskState, action: Action): KioskState {
     case 'api/down':
       return { ...state, apiDown: true };
     case 'start':
-      if (state.menuStatus !== 'ready') return state;
       return { ...state, screen: 'order', stillThereUntil: null };
     case 'tab':
       return { ...state, categoryId: action.categoryId, page: 0 };
@@ -343,6 +354,8 @@ export function reduce(state: KioskState, action: Action): KioskState {
       return { ...state, cardDigits: state.cardDigits + action.digit };
     case 'pay/delete':
       return { ...state, cardDigits: state.cardDigits.slice(0, -1) };
+    case 'pay/clear':
+      return { ...state, cardDigits: '' };
     case 'pay/lock':
       return { ...state, payPhase: 'processing', idempotencyKey: action.key, stillThereUntil: null };
     case 'pay/checking':
@@ -355,9 +368,17 @@ export function reduce(state: KioskState, action: Action): KioskState {
         pickupNumber: action.pickupNumber,
         cardDigits: '',
         idempotencyKey: null,
+        declineCount: 0,
+        assistDialog: false,
+        assistActive: false,
+        receipt: {
+          method: action.method ?? 'tap',
+          last4: action.last4 ?? null,
+          totalCents: action.totalCents ?? cartTotalCents(state.lines),
+        },
       };
     case 'pay/declined':
-      return { ...state, payPhase: 'declined' };
+      return { ...state, payPhase: 'declined', declineCount: state.declineCount + 1, cardDigits: '' };
     case 'pay/changed': {
       const oldTotalCents = cartTotalCents(state.lines);
       const rows = action.changed.lines
@@ -393,16 +414,24 @@ export function reduce(state: KioskState, action: Action): KioskState {
     case 'pay/retry':
       return {
         ...state,
-        payMode: 'tap',
         cardDigits: '',
         payPhase: 'idle',
         priceChange: null,
         idempotencyKey: null,
       };
-    case 'help/open':
-      return { ...state, help: true };
-    case 'help/close':
-      return { ...state, help: false };
+    case 'pay/other-card':
+      return {
+        ...state,
+        payMode: 'card',
+        cardDigits: '',
+        payPhase: 'idle',
+        priceChange: null,
+        idempotencyKey: null,
+      };
+    case 'assist/open':
+      return { ...state, assistActive: true, assistDialog: true, stillThereUntil: null };
+    case 'assist/wait':
+      return { ...state, assistDialog: false };
     case 'start-over/ask':
       if (inPayment(state.payPhase)) return state;
       if (state.lines.length === 0) return createInitialStateFrom(state);
@@ -412,8 +441,14 @@ export function reduce(state: KioskState, action: Action): KioskState {
     case 'start-over/cancel':
       return { ...state, confirmStartOver: false };
     case 'idle/prompt':
-      if (inPayment(state.payPhase)) return state;
-      return { ...state, stillThereUntil: action.until, sheet: null, help: false, confirmStartOver: false };
+      if (inPayment(state.payPhase) || state.assistActive) return state;
+      return {
+        ...state,
+        stillThereUntil: action.until,
+        sheet: null,
+        assistDialog: false,
+        confirmStartOver: false,
+      };
     case 'idle/keep':
       return { ...state, stillThereUntil: null };
     case 'restore':
