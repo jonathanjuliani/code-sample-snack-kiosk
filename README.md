@@ -37,11 +37,11 @@ pnpm dev
 
 Open <http://localhost:5173>. `--host` is on, so a tablet on the same network can open `http://<your-ip>:5173`.
 
-| What | Docker | Native |
-|---|---|---|
-| Kiosk | <http://localhost:8800> | <http://localhost:5173> |
-| Counter page | <http://localhost:8800/ops> | <http://localhost:5173/ops> |
-| API | <http://localhost:8800/api> (nginx proxies `/api`; the API container isn't published) | <http://localhost:3000>, or `/api` through the Vite proxy |
+| What         | Docker                                                                                | Native                                                    |
+| ------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Kiosk        | <http://localhost:8800>                                                               | <http://localhost:5173>                                   |
+| Counter page | <http://localhost:8800/ops>                                                           | <http://localhost:5173/ops>                               |
+| API          | <http://localhost:8800/api> (nginx proxies `/api`; the API container isn't published) | <http://localhost:3000>, or `/api` through the Vite proxy |
 
 Seed data: on first start the API loads `apps/api/seed/menu.json` (venue "Snack Bar", 4 categories, 21 items) into SQLite. It only inserts rows that don't exist yet, so editing the seed changes nothing on an existing database. To start from the seed again:
 
@@ -69,26 +69,26 @@ pnpm test:e2e
 
 Payment is fake and deterministic. These test cards work at the numpad ("Enter card number"):
 
-| Card number | What you should see |
-|---|---|
-| `4242 4242 4242 4242` | Approved. The done screen with a pickup number. |
-| `4000 0000 0000 0002` | "Payment declined". The order is kept. A second decline offers "Get staff help". |
-| `4000 0000 0000 9995` | Slow: "Processing payment…" for 15 seconds, then approved. Use it to reload mid-payment. |
-| Tap ("Tap card or phone") | Approved. |
+| Card number               | What you should see                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `4242 4242 4242 4242`     | Approved. The done screen with a pickup number.                                          |
+| `4000 0000 0000 0002`     | "Payment declined". The order is kept. A second decline offers "Get staff help".         |
+| `4000 0000 0000 9995`     | Slow: "Processing payment…" for 15 seconds, then approved. Use it to reload mid-payment. |
+| Tap ("Tap card or phone") | Approved.                                                                                |
 
 Any other 16-digit number is approved.
 
 **The `/ops` simulation rail.** Open `/ops` on a laptop and the kiosk on a tablet (or another tab). The flags live in memory. "Reset simulations", or a restart, clears them. The rail never presses buttons on the customer's screen.
 
-| Rail control | What you should see on the kiosk |
-|---|---|
-| Next payment → "Declined" | The next payment, tap or card, is declined. |
-| Next payment → "No response, then approved" | The payment is saved, then the connection drops. "Checking your payment…", then the done screen with the one order. |
-| Next payment → "No response, never resolves" | "Checking your payment…" for 30 seconds, then "We couldn't confirm your payment" with a code for the counter. |
-| Payments paused | Within 10 seconds: "We can't take payments right now. You can keep browsing." Pay is disabled. Untick it and Pay comes back by itself. |
-| Menu requests fail | A kiosk opened now shows "We're having trouble loading the menu" with a countdown and "Try now". A kiosk that already has the menu keeps it. |
-| Raise one item by $0.50 | Pay with that item in the cart: "Your total changed", the old and new price, "Pay new total" or "Edit order". |
-| Mark one item sold out | The tile greys out with "Sold out". If it was already in a cart, paying names it and drops it. |
+| Rail control                                 | What you should see on the kiosk                                                                                                             |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Next payment → "Declined"                    | The next payment, tap or card, is declined.                                                                                                  |
+| Next payment → "No response, then approved"  | The payment is saved, then the connection drops. "Checking your payment…", then the done screen with the one order.                          |
+| Next payment → "No response, never resolves" | "Checking your payment…" for 30 seconds, then "We couldn't confirm your payment" with a code for the counter.                                |
+| Payments paused                              | Within 10 seconds: "We can't take payments right now. You can keep browsing." Pay is disabled. Untick it and Pay comes back by itself.       |
+| Menu requests fail                           | A kiosk opened now shows "We're having trouble loading the menu" with a countdown and "Try now". A kiosk that already has the menu keeps it. |
+| Raise one item by $0.50                      | Pay with that item in the cart: "Your total changed", the old and new price, "Pay new total" or "Edit order".                                |
+| Mark one item sold out                       | The tile greys out with "Sold out". If it was already in a cart, paying names it and drops it.                                               |
 
 **Environment flags** (API, off by default):
 
@@ -115,40 +115,40 @@ CHAOS_LATENCY_MS=800 CHAOS_FAIL_RATE=0.3 pnpm --filter @kiosk/api dev
 
 Each line is the customer's side. The status, the tests and the reasoning are in [COVERAGE](docs/COVERAGE.md).
 
-| ID | The customer… | The kiosk… |
-|---|---|---|
-| [H1](docs/COVERAGE.md#must-handle-h) | taps Pay twice | makes one order. The button locks, and the API dedupes on the `Idempotency-Key`. |
-| [H2](docs/COVERAGE.md#must-handle-h) | loses the network mid-payment | shows "Checking your payment…" and "Please don't pay again", asks the API about the same attempt, and never starts a second charge. |
-| [H3](docs/COVERAGE.md#must-handle-h) | arrives while the menu won't load | shows "We're having trouble loading the menu" and keeps retrying, with a "Try now" button. |
-| [H4](docs/COVERAGE.md#must-handle-h) | pays after a price changed or an item sold out | shows "Your total changed" with the difference before anything is charged. |
-| [H5](docs/COVERAGE.md#must-handle-h) | has a card declined | sees "Payment declined", keeps the order, and can try again or use another card. |
-| [H6](docs/COVERAGE.md#must-handle-h) | walks away | gets "Are you still there?" after 60 seconds, then the order is cleared for the next person. |
-| [H7](docs/COVERAGE.md#must-handle-h) | has nothing in the cart, or keeps pressing + | can't pay an empty cart. Quantity stops at 10. |
-| [H8](docs/COVERAGE.md#must-handle-h) | has paid | sees a big pickup number, then the kiosk resets after 8 seconds. |
-| [H9](docs/COVERAGE.md#must-handle-h) | is charged | is charged the server's total, in integer cents. |
-| [H10](docs/COVERAGE.md#must-handle-h) | types a card number | has only the last 4 digits kept. |
-| [K1](docs/COVERAGE.md#kiosk-specific-problems-k) | reloads mid-payment | lands back on "Checking your payment…" and gets the same order. |
-| [K2](docs/COVERAGE.md#kiosk-specific-problems-k) | orders at one of several kiosks | gets a pickup number no other kiosk will get that day. |
-| [K3](docs/COVERAGE.md#kiosk-specific-problems-k) | is ordering when the API goes down | can keep browsing. Pay waits until the API is back. |
-| [K4](docs/COVERAGE.md#kiosk-specific-problems-k) | is the next person at the screen | sees an empty order, never the last person's. |
-| [K5](docs/COVERAGE.md#kiosk-specific-problems-k) | orders at halftime with everyone else | waits on the venue's own API, not a cloud round trip. No load test yet. |
-| [K6](docs/COVERAGE.md#kiosk-specific-problems-k) | asks staff about their order | can be looked up from one log line by key, kiosk or order id. |
-| [K7](docs/COVERAGE.md#kiosk-specific-problems-k) | races another kiosk for the last item | isn't protected. There's no stock count; staff mark items sold out. |
-| [K8](docs/COVERAGE.md#kiosk-specific-problems-k) | relies on a screen reader or can't tell colours apart | gets labelled controls, a live total, and words next to every colour. |
-| [K9](docs/COVERAGE.md#kiosk-specific-problems-k) | needs a person | taps "Staff assist". The counter sees it on `/ops`, and idle waits. |
-| [K10](docs/COVERAGE.md#kiosk-specific-problems-k) | looks at the screen | sees the venue's name and colour, not mine. |
-| [K11](docs/COVERAGE.md#kiosk-specific-problems-k) | is served by a counter that watches every kiosk | shows staff, on `/ops`, recent orders, the counters, which kiosks are live, and who asked for help. |
-| [K12](docs/COVERAGE.md#kiosk-specific-problems-k) | waits on a payment that never answers | gets a code to show at the counter after 30 seconds, never a second charge. |
-| [K13](docs/COVERAGE.md#kiosk-specific-problems-k) | wants to start over | is asked to confirm when there's something in the cart. |
+| ID                                                | The customer…                                         | The kiosk…                                                                                                                          |
+| ------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [H1](docs/COVERAGE.md#must-handle-h)              | taps Pay twice                                        | makes one order. The button locks, and the API dedupes on the `Idempotency-Key`.                                                    |
+| [H2](docs/COVERAGE.md#must-handle-h)              | loses the network mid-payment                         | shows "Checking your payment…" and "Please don't pay again", asks the API about the same attempt, and never starts a second charge. |
+| [H3](docs/COVERAGE.md#must-handle-h)              | arrives while the menu won't load                     | shows "We're having trouble loading the menu" and keeps retrying, with a "Try now" button.                                          |
+| [H4](docs/COVERAGE.md#must-handle-h)              | pays after a price changed or an item sold out        | shows "Your total changed" with the difference before anything is charged.                                                          |
+| [H5](docs/COVERAGE.md#must-handle-h)              | has a card declined                                   | sees "Payment declined", keeps the order, and can try again or use another card.                                                    |
+| [H6](docs/COVERAGE.md#must-handle-h)              | walks away                                            | gets "Are you still there?" after 60 seconds, then the order is cleared for the next person.                                        |
+| [H7](docs/COVERAGE.md#must-handle-h)              | has nothing in the cart, or keeps pressing +          | can't pay an empty cart. Quantity stops at 10.                                                                                      |
+| [H8](docs/COVERAGE.md#must-handle-h)              | has paid                                              | sees a big pickup number, then the kiosk resets after 8 seconds.                                                                    |
+| [H9](docs/COVERAGE.md#must-handle-h)              | is charged                                            | is charged the server's total, in integer cents.                                                                                    |
+| [H10](docs/COVERAGE.md#must-handle-h)             | types a card number                                   | has only the last 4 digits kept.                                                                                                    |
+| [K1](docs/COVERAGE.md#kiosk-specific-problems-k)  | reloads mid-payment                                   | lands back on "Checking your payment…" and gets the same order.                                                                     |
+| [K2](docs/COVERAGE.md#kiosk-specific-problems-k)  | orders at one of several kiosks                       | gets a pickup number no other kiosk will get that day.                                                                              |
+| [K3](docs/COVERAGE.md#kiosk-specific-problems-k)  | is ordering when the API goes down                    | can keep browsing. Pay waits until the API is back.                                                                                 |
+| [K4](docs/COVERAGE.md#kiosk-specific-problems-k)  | is the next person at the screen                      | sees an empty order, never the last person's.                                                                                       |
+| [K5](docs/COVERAGE.md#kiosk-specific-problems-k)  | orders at halftime with everyone else                 | waits on the venue's own API, not a cloud round trip. No load test yet.                                                             |
+| [K6](docs/COVERAGE.md#kiosk-specific-problems-k)  | asks staff about their order                          | can be looked up from one log line by key, kiosk or order id.                                                                       |
+| [K7](docs/COVERAGE.md#kiosk-specific-problems-k)  | races another kiosk for the last item                 | isn't protected. There's no stock count; staff mark items sold out.                                                                 |
+| [K8](docs/COVERAGE.md#kiosk-specific-problems-k)  | relies on a screen reader or can't tell colours apart | gets labelled controls, a live total, and words next to every colour.                                                               |
+| [K9](docs/COVERAGE.md#kiosk-specific-problems-k)  | needs a person                                        | taps "Staff assist". The counter sees it on `/ops`, and idle waits.                                                                 |
+| [K10](docs/COVERAGE.md#kiosk-specific-problems-k) | looks at the screen                                   | sees the venue's name and colour, not mine.                                                                                         |
+| [K11](docs/COVERAGE.md#kiosk-specific-problems-k) | is served by a counter that watches every kiosk       | shows staff, on `/ops`, recent orders, the counters, which kiosks are live, and who asked for help.                                 |
+| [K12](docs/COVERAGE.md#kiosk-specific-problems-k) | waits on a payment that never answers                 | gets a code to show at the counter after 30 seconds, never a second charge.                                                         |
+| [K13](docs/COVERAGE.md#kiosk-specific-problems-k) | wants to start over                                   | is asked to confirm when there's something in the cart.                                                                             |
 
 ## Coverage at a glance
 
-| Group | Items | Handled | Partial | Not handled: by choice | Not handled: out of time | Unverified |
-|---|---|---|---|---|---|---|
-| Must handle (H) | 10 | 10 | 0 | 0 | 0 | 0 |
-| Should handle (S) | 6 | 4 | 2 | 0 | 0 | 0 |
-| Traps (T) | 9 | 5 | 4 | 0 | 0 | 0 |
-| Kiosk (K) | 13 | 9 | 3 | 1 | 0 | 0 |
+| Group             | Items | Handled | Partial | Not handled: by choice | Not handled: out of time | Unverified |
+| ----------------- | ----- | ------- | ------- | ---------------------- | ------------------------ | ---------- |
+| Must handle (H)   | 10    | 10      | 0       | 0                      | 0                        | 0          |
+| Should handle (S) | 6     | 4       | 2       | 0                      | 0                        | 0          |
+| Traps (T)         | 9     | 5       | 4       | 0                      | 0                        | 0          |
+| Kiosk (K)         | 13    | 9       | 3       | 1                      | 0                        | 0          |
 
 The full matrix, with the evidence and the known gaps, is in [docs/COVERAGE.md](docs/COVERAGE.md).
 
@@ -170,35 +170,7 @@ docs             Coverage, decisions, process, approach, the first mockup, scree
 
 The choices and what I rejected are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-### API
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /health` | Readiness, used by compose. Stays `200` with `payments: "down"` when the simulation pauses payments. |
-| `GET /menu` | Categories, items (`priceCents`, `description`, `available`, `optionGroups`), `venue` (`name`, `accent`) and `version`. Sends an `ETag`; `If-None-Match` gets `304`. |
-| `POST /orders` | Header `Idempotency-Key: <uuid>`. Body `{ kioskId, menuVersion, lines: [{ itemId, qty, choiceIds }], payment: { method: "card", cardNumber } \| { method: "tap" }, clientTotalCents }`. |
-| `GET /orders?idempotencyKey=<uuid>` | What happened to a checkout attempt (used to resume after a reload or a dropped response). |
-| `GET /orders/:id` | The state of one order, for staff and debugging. |
-| `GET /ops/summary` | Last 20 orders, the counters, the menu version, each kiosk's last heartbeat, app version and reported screen, and open staff-assist requests. No auth. |
-| `GET /ops/simulation` | The simulation flags and the items the rail can target. No auth. |
-| `PUT /ops/simulation` | Replace the flags. Unknown item ids are `400`. No auth. |
-| `POST /ops/events` | `{ kioskId, kind: "heartbeat" \| "idle_reset", appVersion?, screen?, payPhase?, itemCount?, totalCents? }`. Answers `204`. |
-| `POST /kiosk/assist` | `{ kioskId }`. Records an open staff-assist request. Answers `204`. |
-
-What `POST /orders` answers:
-
-| Outcome | Status | Body |
-|---|---|---|
-| Paid | `201` | `{ orderId, status: "paid", pickupNumber, totalCents, lines, paymentMethod, last4 }` |
-| Same key, same request, already paid | `200` | the original body, with `Idempotent-Replayed: true` |
-| Same key, same request, already declined | `402` | the original body, with `Idempotent-Replayed: true` |
-| Same key, same request, still paying | `202` | `{ orderId, status: "pending_payment" }` |
-| Same key, different request | `422` | `{ error: "idempotency_key_reused" }` |
-| Price changed or item unavailable | `409` | `{ error: "order_changed", totalCents, lines, unavailableItemIds, menuVersion }` |
-| Payment declined | `402` | `{ orderId, status: "payment_failed", error: "payment_declined", message }` (safe to show) |
-| Invalid body, unknown item or option, missing key | `400` | `{ error: "invalid_request", issues: [{ path, message }] }` |
-
-PCI in one sentence: this is a fake keypad. A real deployment would tokenize through a PCI-certified terminal and never see a card number.
+The endpoints and every status `POST /orders` can answer are in [docs/API.md](docs/API.md).
 
 ## How I approached and built it
 
@@ -231,13 +203,13 @@ Each one on purpose, with where it would plug in.
 
 Captured with Playwright at 1280×800 on 2026-11-02, from the compose stack on a fresh database.
 
-| | |
-|---|---|
-| ![Attract screen: Snack Bar, Order here., Tap to start](docs/screenshots/attract.png) | ![Order screen with two items in the cart](docs/screenshots/menu-cart.png) |
-| Attract | Menu with a cart |
+|                                                                                                  |                                                                                                                     |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| ![Attract screen: Snack Bar, Order here., Tap to start](docs/screenshots/attract.png)            | ![Order screen with two items in the cart](docs/screenshots/menu-cart.png)                                          |
+| Attract                                                                                          | Menu with a cart                                                                                                    |
 | ![Pay screen with the on-screen numpad, 8 of 16 digits entered](docs/screenshots/pay-numpad.png) | ![Your total changed dialog: Salted chips from $2.50 to $3.00, new total $6.00](docs/screenshots/total-changed.png) |
-| Pay, card numpad | Recovery: the total changed |
-| ![Done screen: Paid. Your order number is A-001](docs/screenshots/done.png) | ![Counter page: counters, kiosks, staff assist, last orders and the simulation rail](docs/screenshots/ops.png) |
-| Done | `/ops` |
+| Pay, card numpad                                                                                 | Recovery: the total changed                                                                                         |
+| ![Done screen: Paid. Your order number is A-001](docs/screenshots/done.png)                      | ![Counter page: counters, kiosks, staff assist, last orders and the simulation rail](docs/screenshots/ops.png)      |
+| Done                                                                                             | `/ops`                                                                                                              |
 
 Portrait, 800×1280: [docs/screenshots/portrait-menu.png](docs/screenshots/portrait-menu.png).
