@@ -1,0 +1,4 @@
+#!/bin/sh
+# Biome on the staged files only, so an unformatted file can't reach a commit.
+# Fix with: pnpm format
+exec pnpm exec biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true
