@@ -23,6 +23,8 @@ Short records of choices that outlive a single change. Each says what was reject
 | Declined                | Error. "Card not accepted", no blame, no bank codes. Order kept; "Try another card" or "Back to order".                                                                                                  |
 | API down                | A warning strip; browsing works, Pay disabled with the reason on the button. Recovers on its own.                                                                                                        |
 
+**Superseded:** the copy in this table is the first mockup's. D10 replaced it. The screens now say "Processing payment…" / "Checking your payment…", "Your total changed" with "Pay new total" and "Edit order", "Payment declined" with "Try again" and "Use another card", and "We can't take payments right now. You can keep browsing." The patterns are the same. The quoted wording is in [COVERAGE](COVERAGE.md).
+
 **Idle**: 60s on the order screen, 90s on checkout, then a 15s "Still there?" countdown. Suspended while a payment is in progress, being checked, or unresolved. Done resets after 12s. Superseded by D15.
 
 **Tokens**: the role-based set in the mockup (type 18 / 20 / 24 / 32 / 40 / 56, spacing 4 to 48, AA contrast minimum and AAA for totals, one light theme on purpose). The first client copied these values. D10 replaces them with the enhancement-pass set in `apps/web/src/styles/tokens.css`.
@@ -86,7 +88,7 @@ Short records of choices that outlive a single change. Each says what was reject
 
 **What a reused key does**: same key and same request returns the stored response (`200` for a paid order, `402` for a declined one, `202` while pending). Same key with a different request is `422`. The request hash covers kiosk, lines, choices, payment method, the last 4 digits and the client total; it never includes the full card number.
 
-**Consequences**: A declined attempt is final for its key; "Try another card" starts a new checkout attempt with a new key. Reopen if payments become real: the payment provider's own idempotency key should then be our order id.
+**Consequences**: A declined attempt is final for its key; "Try another card" starts a new checkout attempt with a new key. Superseded (labels only): the buttons are now "Try again" and "Use another card", and both start a new attempt with a new key (`pay/retry` and `pay/other-card` in `apps/web/src/kiosk/machine/reduce.ts`). Reopen if payments become real: the payment provider's own idempotency key should then be our order id.
 
 ## D6. The server prices every order; a changed total is a 409, not a silent charge
 
@@ -115,7 +117,7 @@ Short records of choices that outlive a single change. Each says what was reject
 - _Flat items only_ (rejected): simpler contract, but the option sheet in the mockup would have nothing to drive.
 - _Option groups and choices as their own tables_ (rejected after drafting the data model): they're only read with their item, never queried alone, so they live as a JSON column on `menu_items`, validated by the shared Zod schema at seed time.
 
-**Consequences**: Combos and multi-select groups ("extra toppings") stay out; see Skipped.
+**Consequences**: Combos and multi-select groups ("extra toppings") stay out; see [Skipped](../README.md#skipped-and-why).
 
 ## D8. Resuming after a reload looks the attempt up by its idempotency key
 
@@ -240,3 +242,58 @@ The summary keeps the counter names from the first `/ops` pass (`idempotentRepla
 - _Persist the flags in SQLite_ (rejected): a crash would leave a bumped price in the seed. Memory plus Reset is enough for a demo.
 
 **Consequences**: Anyone who can reach the API can pause payments or force a decline. That is the same trust as D9, and a real counter still wants staff sign-in. `CHAOS_FAIL_RATE` still applies when the payment select is "Follow the card"; a chosen result does not also roll that dice. "No response, never resolves" leaves a `pending_payment` row. The heartbeat may carry the screen, the pay phase, the item count, and the total. It still carries no card number. Reopen if the counter gets sign-in, or if a demo needs to drive the customer's screen.
+
+## D17. One reducer drives the kiosk, not XState
+
+**Status**: Accepted (chosen in Phase 5 of [PROCESS](PROCESS.md); written up in the final docs pass)
+
+**Decision**: The kiosk's screens, payment phases and dialogs are one `useReducer` with a typed `Action` union in `apps/web/src/kiosk/machine/`. Side effects (fetches, timers, storage) live in `kiosk.tsx` and dispatch actions.
+
+**Options considered**
+
+- _`useReducer` with plain functions_ (chosen): one machine, a few files, tested as pure functions in `apps/web/test/machine.test.ts` with no DOM. Anyone who reads React can read it.
+- _XState_ (rejected): it would give me guards and a visualizer, but it adds a dependency and a vocabulary for one machine I can test without it.
+- _Routes per screen_ (rejected; see D1): the browser's back gesture could skip a recovery screen.
+
+**Consequences**: The reducer doesn't stop an impossible transition by itself. `inPayment` and `canPay` in `machine/pay.ts` are the guards, and the tests pin them. Reopen if a second machine appears (say, a staff mode on the same tablet).
+
+## D18. A cached menu, but no offline payments
+
+**Status**: Accepted (the API-down pattern in D1 and the mockup; written up in the final docs pass)
+
+**Decision**: The kiosk keeps the last good menu in `localStorage` and lets the customer browse it while the API is down. It never takes a payment without the API. Pay stays disabled with "We can't take payments right now. You can keep browsing." until `/health` answers again, which the kiosk checks every 10 seconds.
+
+**Options considered**
+
+- _Browse offline, pay online_ (chosen): browsing offline costs nothing. A payment needs an authorization and a server price, and neither exists offline.
+- _Queue orders and payments locally, upload later_ (rejected): the fake keypad can't authorize, so a queued payment is a promise nobody can keep. It would need a terminal that approves offline, plus a journal with client-made ids that uploads idempotently.
+- _Block the whole screen while the API is down_ (rejected): a customer who's already choosing loses their order for a blip that usually clears in seconds.
+
+**Consequences**: A long outage means the customer can build an order and can't pay for it. The banner says so, and "Start over" is offered. Reopen if the payment provider supports offline authorization.
+
+## D19. Stock races are deferred
+
+**Status**: Accepted (a cut-line item since Phase 9; written up in the final docs pass)
+
+**Decision**: Menu items have an `available` flag and no stock count. Two kiosks can both sell the last hot dog.
+
+**Options considered**
+
+- _Availability flag set by staff_ (chosen): a snack bar runs out because someone at the counter notices, not because an inventory system counts down. The flag already gives the customer a 409 and "Sold out" when it flips.
+- _A stock count with a conditional decrement_ (rejected for now): `UPDATE menu_items SET stock = stock - ? WHERE id = ? AND stock >= ?` inside the transaction that inserts the pending order, with 0 rows changed becoming a 409 for that line. It's small, but it needs a way for staff to set the count, and that's the admin I skipped.
+
+**Consequences**: The contract wouldn't change: a short line comes back like a sold-out line, in `unavailableItemIds`. Reopen when a venue has a real stock count to feed it.
+
+## D20. The kiosk waits only on the venue's own API
+
+**Status**: Proposed (recorded by the agent in the final docs pass; I still have to confirm it)
+
+**Decision**: The API, with its SQLite file, runs at the venue next to the kiosks (one compose stack per counter), not in a cloud region. A kiosk's order waits on the local network and the payment terminal, never on a cloud round trip.
+
+**Options considered**
+
+- _One API per venue, SQLite in WAL mode_ (chosen): a halftime rush is local. The writes are short synchronous transactions, and WAL lets readers (the menu, `/ops`) carry on while one writer commits.
+- _A central cloud API_ (rejected for the checkout path): every order would depend on the venue's uplink at exactly the moment the venue is busiest.
+- _Postgres per venue_ (rejected; see D4): a second container to run for one counter.
+
+**Consequences**: Reporting across venues would be a sync from each venue's database, after the fact. Not measured: I haven't load-tested a burst ([COVERAGE K5](COVERAGE.md#kiosk-specific-problems-k)). Reopen if one venue has more kiosks than one SQLite writer can serve, or if orders need to be visible centrally in real time.
