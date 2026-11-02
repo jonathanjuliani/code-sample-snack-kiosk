@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react';
 import '../styles/pay.css';
-import { DeleteIcon, ReaderIcon } from '../icons';
+import { ArrowIcon, DeleteIcon } from '../icons';
 import { maskDigits } from './helpers';
 import type { Action, KioskState } from './machine';
 
@@ -8,22 +8,18 @@ export function PayMain({
   state,
   dispatch,
   locked,
+  canSubmit,
+  onPay,
 }: {
   state: KioskState;
   dispatch: Dispatch<Action>;
   locked: boolean;
+  canSubmit: boolean;
+  onPay: () => void;
 }) {
   const digits = state.cardDigits;
   return (
     <>
-      <button
-        type="button"
-        className="back"
-        disabled={locked}
-        onClick={() => dispatch({ type: 'edit-order' })}
-      >
-        Add more
-      </button>
       <div className="main-head">
         <h1>How would you like to pay?</h1>
       </div>
@@ -48,14 +44,14 @@ export function PayMain({
         </button>
       </div>
       {state.payMode === 'tap' ? (
-        <div className="tap-panel">
-          <ReaderIcon />
-          <h2>Ready when you are</h2>
-          <p>
-            Press Pay, then follow the card reader below the screen. If you insert a card, keep it in until
-            this screen says you're done.
-          </p>
-        </div>
+        <button type="button" className="tapzone" disabled={locked || !canSubmit} onClick={onPay}>
+          <span className="tapzone-copy">
+            <span className="tapzone-big">Tap your card or phone on the reader</span>
+            <span className="tapzone-small">The reader is below this screen.</span>
+            <span className="tapzone-mock">Mock: tap here to simulate the reader.</span>
+          </span>
+          <ArrowIcon size={56} className="tapzone-arrow" />
+        </button>
       ) : (
         <>
           <div className="card-mask num" role="status" aria-live="polite" aria-atomic="true">

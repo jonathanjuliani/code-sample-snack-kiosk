@@ -126,7 +126,7 @@ export function UnresolvedDialog({ code, onDone }: { code: string; onDone: () =>
   );
 }
 
-export function AssistDialog({ onWait }: { onWait: () => void }) {
+export function AssistDialog({ onWait, hasOrder }: { onWait: () => void; hasOrder: boolean }) {
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     ref.current?.focus();
@@ -135,7 +135,10 @@ export function AssistDialog({ onWait }: { onWait: () => void }) {
     <div className="scrim">
       <div className="dialog" role="dialog" aria-labelledby="assist-title">
         <h2 id="assist-title">Help is on the way</h2>
-        <p>A team member has been notified and will come to this screen. Your order is saved.</p>
+        <p>
+          A team member has been notified and will come to this screen.
+          {hasOrder ? ' Your order is saved.' : ''}
+        </p>
         <div className="actions">
           <button ref={ref} type="button" className="primary" onClick={onWait}>
             OK, I'll wait

@@ -75,6 +75,15 @@ test('happy path pays by tap and returns to the attract screen', async ({ page }
   await expect(page.getByRole('button', { name: /tap to start/i })).toBeVisible();
 });
 
+test('happy path pays by mock tapzone', async ({ page }) => {
+  await openMenu(page, '/?kiosk=e2e-tapzone');
+  await page.getByRole('button', { name: /salted chips/i }).click();
+  await page.getByRole('button', { name: /review and pay/i }).click();
+  await page.getByRole('button', { name: /simulate the reader/i }).click();
+  await expect(page.getByText('Paid. Your order number is')).toBeVisible();
+  await expect(page.locator('.ordno')).toHaveText(/^[A-Z]-\d{3}$/);
+});
+
 test('double tap on Pay creates one order', async ({ page }) => {
   const statuses: number[] = [];
   page.on('response', (response) => {

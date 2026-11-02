@@ -21,27 +21,68 @@
   background: var(--accent-tint);
 }
 
-.tap-panel {
+.tapzone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  margin-top: var(--sp-5);
+  padding: var(--sp-6);
+  border: 3px dashed var(--ink);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+}
+
+.tapzone:disabled {
+  opacity: 0.55;
+}
+
+.tapzone-copy {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  margin-top: var(--sp-5);
-  padding: var(--sp-6);
-  border-radius: var(--r-lg);
-  background: var(--panel);
+  min-width: 0;
 }
 
-.tap-panel h2 {
-  margin: 0;
+.tapzone-big {
   font-family: var(--font-display);
   font-size: var(--fs-2xl);
   font-weight: 800;
+  line-height: var(--lh-tight);
 }
 
-.tap-panel p {
-  margin: 0;
-  max-width: 40rem;
+.tapzone-small {
   color: var(--muted-strong);
+}
+
+.tapzone-mock {
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.tapzone-arrow {
+  flex: none;
+  animation: tap-nudge 1.6s ease-in-out infinite;
+}
+
+@keyframes tap-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tapzone-arrow {
+    animation: none;
+  }
 }
 
 .card-mask {

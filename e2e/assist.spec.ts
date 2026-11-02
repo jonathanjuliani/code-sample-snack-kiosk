@@ -38,3 +38,19 @@ test('two declines open staff assist and ops lists the request', async ({ page }
   const assistSection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Staff assist' }) });
   await expect(assistSection.getByRole('cell', { name: 'e2e-assist' })).toBeVisible();
 });
+
+test('staff assist copy mentions a saved order only when the cart has items', async ({ page }) => {
+  await openMenu(page, '/?kiosk=e2e-assist-copy');
+  await page.getByRole('button', { name: /staff assist/i }).click();
+  const emptyDialog = page.getByRole('dialog', { name: 'Help is on the way' });
+  await expect(emptyDialog).toBeVisible();
+  await expect(emptyDialog.getByText('Your order is saved.')).toHaveCount(0);
+  await page.getByRole('button', { name: /ok, i'll wait/i }).click();
+  await expect(emptyDialog).toBeHidden();
+
+  await page.getByRole('button', { name: /salted chips/i }).click();
+  await page.getByRole('button', { name: /staff assist/i }).click();
+  const filledDialog = page.getByRole('dialog', { name: 'Help is on the way' });
+  await expect(filledDialog).toBeVisible();
+  await expect(filledDialog.getByText('Your order is saved.')).toBeVisible();
+});

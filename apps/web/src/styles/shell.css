@@ -63,7 +63,6 @@
 }
 
 .main {
-  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -73,11 +72,21 @@
   overscroll-behavior: contain;
 }
 
+.main-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.main-bar-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
 .assist {
-  position: absolute;
-  top: var(--sp-4);
-  right: var(--sp-4);
-  z-index: var(--z-banner);
+  flex: none;
   min-height: var(--tap-min);
   padding: 0 var(--sp-4);
   border: 0;
@@ -101,7 +110,6 @@
 
 .main-head h1 {
   margin: 0 0 var(--sp-4);
-  padding-right: 180px;
   font-family: var(--font-display);
   font-size: var(--fs-3xl);
   font-weight: 800;
@@ -121,7 +129,6 @@
 }
 
 .item {
-  position: relative;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -129,7 +136,6 @@
   border-radius: var(--r-lg);
   background: var(--ground);
   text-align: left;
-  overflow: hidden;
 }
 
 .item:disabled {
@@ -137,9 +143,11 @@
 }
 
 .tile {
+  position: relative;
   display: grid;
   place-items: center;
   height: 132px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
   font-family: var(--font-display);
   font-size: var(--fs-3xl);
   font-weight: 800;
@@ -188,7 +196,10 @@
   border-radius: var(--r-pill);
   background: var(--ink);
   color: var(--ground);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
   font-weight: 700;
+  line-height: 1;
 }
 
 .badge.bump {
@@ -252,6 +263,7 @@
 
 .sk-tile {
   height: 132px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
   background: var(--panel);
 }
 
@@ -296,7 +308,6 @@
 
 .back {
   min-height: var(--tap-min);
-  margin-bottom: var(--sp-3);
   padding: 0 var(--sp-4);
   border: 2px solid var(--line-strong);
   border-radius: var(--r-md);

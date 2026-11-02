@@ -10,6 +10,7 @@ import {
   submitOrder,
 } from '../api';
 import { applyVenueAccent } from '../contrast';
+import { newIdempotencyKey } from '../id';
 import {
   cacheMenu,
   clearAttempt,
@@ -315,7 +316,7 @@ export function Kiosk() {
     if (payLock.current || !canPay(current)) return;
     const body = buildRequest();
     if (!body) return;
-    const key = current.idempotencyKey ?? crypto.randomUUID();
+    const key = current.idempotencyKey ?? newIdempotencyKey();
     payLock.current = true;
     dispatch({ type: 'pay/lock', key });
     saveAttempt({ idempotencyKey: key, kioskId });
@@ -446,6 +447,9 @@ export function Kiosk() {
             if (state.screen === 'order') dispatch({ type: 'review' });
             else void pay();
           }}
+          onPay={() => {
+            void pay();
+          }}
           onStartOver={() => dispatch({ type: 'start-over/ask' })}
         />
       ) : null}
@@ -478,7 +482,7 @@ export function Kiosk() {
         <UnresolvedDialog code={state.unresolvedCode ?? ''} onDone={startOver} />
       ) : null}
       {state.dialog?.kind === 'assist' ? (
-        <AssistDialog onWait={() => dispatch({ type: 'assist/wait' })} />
+        <AssistDialog hasOrder={state.lines.length > 0} onWait={() => dispatch({ type: 'assist/wait' })} />
       ) : null}
       {state.dialog?.kind === 'confirmStartOver' ? (
         <ConfirmStartOver onYes={startOver} onNo={() => dispatch({ type: 'start-over/cancel' })} />

@@ -24,6 +24,7 @@ export function Shell({
   onRetryMenu,
   onAssist,
   onPrimary,
+  onPay,
   onStartOver,
 }: {
   state: KioskState;
@@ -34,6 +35,7 @@ export function Shell({
   onRetryMenu: () => void;
   onAssist: () => void;
   onPrimary: () => void;
+  onPay: () => void;
   onStartOver: () => void;
 }) {
   const categories = visibleCategories(state.menu);
@@ -72,9 +74,23 @@ export function Shell({
         )}
       </aside>
       <div className="main">
-        <button type="button" className="assist" onClick={onAssist}>
-          Staff assist
-        </button>
+        <div className="main-bar">
+          {state.screen === 'checkout' ? (
+            <button
+              type="button"
+              className="back"
+              disabled={locked}
+              onClick={() => dispatch({ type: 'edit-order' })}
+            >
+              Add more
+            </button>
+          ) : (
+            <span className="main-bar-spacer" />
+          )}
+          <button type="button" className="assist" onClick={onAssist}>
+            Staff assist
+          </button>
+        </div>
         {state.apiDown && state.menu ? (
           <div className="banner" role="status">
             <WarnIcon size={28} />
@@ -146,7 +162,13 @@ export function Shell({
             ) : null}
           </>
         ) : (
-          <PayMain state={state} dispatch={dispatch} locked={locked} />
+          <PayMain
+            state={state}
+            dispatch={dispatch}
+            locked={locked}
+            canSubmit={canPay(state)}
+            onPay={onPay}
+          />
         )}
       </div>
       <aside className="cart" aria-label="Your order">
