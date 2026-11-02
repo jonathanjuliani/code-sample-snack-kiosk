@@ -1,6 +1,6 @@
 # Snack Bar Kiosk
 
-A self-service checkout for a snack-bar counter. A customer alone at a tablet browses the menu, orders, pays and leaves, and I built it to explore what goes wrong when nobody is there to help.
+The idea was to create an app simulating a self-service checkout for a snack-bar counter: a customer alone at a tablet browses the menu, orders, pays and leaves. I built it to explore what goes wrong when nobody is there to help.
 
 ![The order screen with two items in the cart](docs/screenshots/menu-cart.png)
 
@@ -8,7 +8,7 @@ A self-service checkout for a snack-bar counter. A customer alone at a tablet br
 
 You need:
 
-- Node 24 or 26 (`.nvmrc` says 24)
+- Node 24 or 26 (`.nvmrc` is set to use Node 24)
 - pnpm 11.1.3: `corepack enable` gives you the pinned version
 - Docker with Compose v2 for the container path
 - Chromium for Playwright for the browser tests: `pnpm exec playwright install chromium`
@@ -174,7 +174,7 @@ The endpoints and every status `POST /orders` can answer are in [docs/API.md](do
 
 ## How I approached and built it
 
-I started from the person at the screen: what they'll do that a happy-path demo never shows, and what must never happen to them. I designed every screen, including the recovery screens, as a clickable mockup before writing code. Then I built in phases with an AI coding agent under written rules, each phase ending in tests I ran myself.
+The idea was to start from the person at the screen: what they'll do that a happy-path demo never shows, and the priorities we must avoid getting wrong for them. I designed every screen, including the recovery screens, as a clickable mockup before writing code. Then I built in phases with an AI coding agent under written rules, each phase ending in tests I ran myself.
 
 - [docs/APPROACH.md](docs/APPROACH.md): how I thought about the problem, in order.
 - [docs/PROCESS.md](docs/PROCESS.md): how I drove the tools, phase by phase: what I asked for, what I kept and what I threw away.

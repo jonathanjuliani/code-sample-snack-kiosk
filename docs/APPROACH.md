@@ -4,13 +4,13 @@ How I went at this, in order. Status per item is in [COVERAGE](COVERAGE.md), the
 
 ## 1. Understanding the problem
 
-A tablet on a snack-bar counter, nobody behind it, and a hurried customer who has never used it. They'll tap twice, walk off halfway, reload, and use the card that gets declined. Nobody is there to explain, so the screen has to.
+The idea with the approach was to think of it working like a tablet on a snack-bar counter, with nobody behind it and a hurried customer who has never used it. They'll tap twice, walk off halfway, reload, and use the card that gets declined. Nobody is there to explain, so the screen has to.
 
 Before any code I asked three questions:
 
-- What can go wrong at the screen?
-- What can go wrong between the screen and the server?
-- What must never happen?
+- In this situation, what can we try to avoid on the screen?
+- What can we try to avoid between the screen and the server?
+- What are the priorities that we must avoid?
 
 The answer to the last one was short: a double charge, a lost order, someone else's order on screen, a card number on disk.
 
