@@ -2,7 +2,11 @@
 
 The idea was to create an app simulating a self-service checkout for a snack-bar counter: a customer alone at a tablet browses the menu, orders, pays and leaves. I built it to explore what goes wrong when nobody is there to help.
 
-![The order screen with two items in the cart](docs/screenshots/menu-cart.png)
+| ![Attract screen: Snack Bar, Order here., Tap to start](docs/screenshots/attract.png) | ![The order screen with two items in the cart](docs/screenshots/menu-cart.png) |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| The start screen                                                                      | Ordering, with the cart on the right                                           |
+
+More screens, including a recovery dialog and the counter page, are under [Screenshots](#screenshots).
 
 ## Run it
 
