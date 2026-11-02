@@ -8,6 +8,8 @@ A self-service snack-bar kiosk: `apps/api` (Fastify + SQLite), `apps/web` (Vite 
 pnpm verify   # biome check, tsc in every package, vitest in every package
 ```
 
+CI runs the same command and `pnpm test:e2e` on every pull request, so a change that fails here fails there. The pre-commit hook refuses unformatted staged files; fix with `pnpm format`, never with `--no-verify`.
+
 ## When adding or changing a field on an order, a line or a menu item
 
 - Change the Zod schema in `packages/shared` first and infer the type from it. Never hand-write a type the schema already describes.

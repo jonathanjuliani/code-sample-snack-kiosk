@@ -356,3 +356,30 @@ The results are in [COVERAGE](COVERAGE.md).
 - A README API table that Biome reformatted differently on every pass. It moved to `docs/API.md` instead of being fought.
 
 **Time**: about 40 minutes of agent time on the clock, including the Docker build and two full Playwright runs.
+
+## Lint gate
+
+**What the tool was asked for**
+
+- Fix the lint failure the docs pass reported, and make sure it can't come back on a clean install or a future change.
+
+**Why it happened**
+
+- `apps/web/src/id.ts` arrived in `7bb9499` with double quotes and never went through Biome. Nothing in the repo ran the checks on its own: no CI, no hook. `pnpm verify` was a rule in AGENTS.md that depended on someone remembering it.
+
+**Kept**
+
+- `pnpm format` on `id.ts`. Four lines, quotes only.
+- `.github/workflows/ci.yml`: `pnpm verify` and `pnpm test:e2e` on every push to `main` and every pull request, with `pnpm install --frozen-lockfile` and the Chromium build that matches the locked Playwright (the mismatch the docs pass hit in its own container).
+- `.githooks/pre-commit`: `biome check --staged`, so the formatter runs on what's being committed. The root `prepare` script sets `core.hooksPath`, so `pnpm install` turns it on. It ends in `|| true`, so the Docker build, which has no git, isn't affected.
+
+**Thrown away**
+
+- Husky or lefthook for the hook. A dependency to run one shell line isn't worth it.
+- Running all of `pnpm verify` in the hook. Typecheck and 108 tests on every commit is slow enough that people skip it; CI does that part.
+
+**Verification**
+
+- `pnpm verify`: exit 0. Biome clean on 92 files; 37 + 34 + 37 tests.
+- In a copy of the repo with no `node_modules`, `pnpm install --frozen-lockfile` set `core.hooksPath` to `.githooks`. A formatted commit went through. A commit with a new unformatted file was refused with exit 1.
+- The CI run itself is on the pull request that adds it.

@@ -66,8 +66,13 @@ pnpm test:e2e
 
 - `pnpm typecheck`: clean in all three packages.
 - `pnpm test`: 108 passed (shared 37, API 34, web 37).
-- `pnpm lint`: **1 error.** Biome wants single quotes in `apps/web/src/id.ts`. Until that's formatted, `pnpm verify` stops at lint. See [COVERAGE T6](docs/COVERAGE.md#traps-to-avoid-t).
+- `pnpm lint`: clean (92 files). It failed on one unformatted file in the first docs pass; that's fixed, and it's now gated (below).
 - `pnpm test:e2e`: 18 passed in 48s. It starts its own API on 3010 and Vite on 5180, with a throwaway database at 1280×800 with touch.
+
+**What stops a broken check from landing**
+
+- **CI** (`.github/workflows/ci.yml`) runs `pnpm install --frozen-lockfile` and `pnpm verify` on every push to `main` and every pull request, and `pnpm test:e2e` in a second job, with the Chromium build that matches the locked Playwright.
+- **A pre-commit hook** (`.githooks/pre-commit`) runs Biome on the staged files and refuses the commit if one isn't formatted. `pnpm install` turns it on (`prepare` sets `core.hooksPath`). Fix a refusal with `pnpm format`. Skip it once with `git commit --no-verify` if you must; CI still checks.
 
 ## Try the failure cases
 
@@ -151,7 +156,7 @@ Each line is the customer's side. The status, the tests and the reasoning are in
 | ----------------- | ----- | ------- | ------- | ---------------------- | ------------------------ | ---------- |
 | Must handle (H)   | 10    | 10      | 0       | 0                      | 0                        | 0          |
 | Should handle (S) | 6     | 4       | 2       | 0                      | 0                        | 0          |
-| Traps (T)         | 9     | 5       | 4       | 0                      | 0                        | 0          |
+| Traps (T)         | 9     | 6       | 3       | 0                      | 0                        | 0          |
 | Kiosk (K)         | 13    | 9       | 3       | 1                      | 0                        | 0          |
 
 The full matrix, with the evidence and the known gaps, is in [docs/COVERAGE.md](docs/COVERAGE.md).

@@ -80,7 +80,7 @@ The tests aim at the paths that can hurt someone, not at a coverage number: doub
 
 To see the failures without reading tests there are test cards, two chaos flags, and a simulation rail on `/ops` that forces each recovery screen on a real tablet ([D16](DECISIONS.md#d16-the-counter-can-force-the-recovery-cases)).
 
-In the last pass I ran everything from a fresh clone and wrote down what failed: one lint error, and two README instructions that didn't do what they said ([Known gaps](COVERAGE.md#known-gaps)).
+In the last pass I ran everything from a fresh clone and wrote down what failed: one lint error (since fixed, and now gated in CI and a pre-commit hook), and two README instructions that didn't do what they said ([Known gaps](COVERAGE.md#known-gaps)).
 
 ## 6. Where it would go next
 
