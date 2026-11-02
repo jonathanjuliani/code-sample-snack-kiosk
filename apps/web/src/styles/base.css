@@ -1,0 +1,162 @@
+@import "./tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+html[data-surface="ops"],
+html[data-surface="ops"] body,
+html[data-surface="ops"] #root {
+  height: auto;
+  min-height: 100%;
+}
+
+html[data-surface="ops"] body {
+  overflow: visible;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  transform: none;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk {
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-xl);
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.primary:disabled {
+  background: var(--disabled-bg);
+  color: var(--disabled-fg);
+}
+
+.secondary {
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-5);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-md);
+  background: transparent;
+  font-weight: 700;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid color-mix(in srgb, var(--on-accent) 35%, transparent);
+  border-top-color: var(--on-accent);
+  border-radius: 50%;
+  animation: spin var(--dur-slow) linear infinite;
+}
+
+.primary:disabled .spinner {
+  border-color: color-mix(in srgb, var(--disabled-fg) 35%, transparent);
+  border-top-color: var(--disabled-fg);
+  animation: none;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6);
+  background: var(--scrim);
+  animation: fade var(--dur-base) var(--ease-out);
+}
+
+.scrim.idle {
+  z-index: var(--z-idle);
+  background: var(--scrim-strong);
+}
+
+@keyframes bump {
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

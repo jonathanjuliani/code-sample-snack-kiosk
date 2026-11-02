@@ -1,4 +1,4 @@
-import type { CartLine } from './machine';
+import type { CartLine } from './kiosk/machine';
 
 // Card digits stay in component state only. This module never reads or writes them.
 const CART_KEY = 'kiosk.cart';

@@ -7,7 +7,7 @@ import {
   inPayment,
   type KioskState,
   reduce,
-} from '../src/machine';
+} from '../src/kiosk/machine';
 
 const menu = {
   version: 'v1',
@@ -141,7 +141,7 @@ describe('kiosk machine', () => {
     state = reduce(state, { type: 'start' });
     state = reduce(state, { type: 'tile', itemId: 'chips' });
     state = reduce(state, { type: 'idle/prompt', until: 1_000 });
-    expect(state.stillThereUntil).toBe(1_000);
+    expect(state.dialog).toEqual({ kind: 'stillThere', until: 1_000 });
     expect(state.screen).toBe('order');
     state = reduce(state, { type: 'start-over/confirm' });
     expect(state.screen).toBe('start');
@@ -192,5 +192,111 @@ describe('kiosk machine', () => {
     state = reduce(state, { type: 'api/down' });
     expect(state.apiDown).toBe(true);
     expect(canPay(state)).toBe(false);
+  });
+
+  it('opens assist dialog and clears only the dialog on wait', () => {
+    let state = ready();
+    state = reduce(state, { type: 'assist/open' });
+    expect(state.dialog).toEqual({ kind: 'assist' });
+    expect(state.assistActive).toBe(true);
+    state = reduce(state, { type: 'assist/wait' });
+    expect(state.dialog).toBeNull();
+    expect(state.assistActive).toBe(true);
+  });
+
+  it('asks to confirm start-over when the cart has lines', () => {
+    let state = ready();
+    state = reduce(state, { type: 'start' });
+    state = reduce(state, { type: 'tile', itemId: 'chips' });
+    state = reduce(state, { type: 'start-over/ask' });
+    expect(state.dialog).toEqual({ kind: 'confirmStartOver' });
+    state = reduce(state, { type: 'start-over/cancel' });
+    expect(state.dialog).toBeNull();
+    expect(state.lines).toHaveLength(1);
+  });
+
+  it('resets immediately when start-over is asked on an empty cart', () => {
+    let state = ready();
+    state = reduce(state, { type: 'start' });
+    state = reduce(state, { type: 'start-over/ask' });
+    expect(state.screen).toBe('start');
+    expect(state.dialog).toBeNull();
+  });
+
+  it('blocks start-over while a payment is in flight', () => {
+    let state = ready();
+    state = reduce(state, { type: 'tile', itemId: 'chips' });
+    state = reduce(state, { type: 'review' });
+    state = reduce(state, { type: 'pay/lock', key: '11111111-1111-4111-8111-111111111111' });
+    state = reduce(state, { type: 'start-over/ask' });
+    expect(state.dialog).toBeNull();
+    expect(state.payPhase).toBe('processing');
+  });
+
+  it('moves through checking, other-card, unresolved, and idle/keep', () => {
+    let state = ready();
+    state = reduce(state, { type: 'tile', itemId: 'chips' });
+    state = reduce(state, { type: 'review' });
+    state = reduce(state, { type: 'pay/lock', key: '11111111-1111-4111-8111-111111111111' });
+    state = reduce(state, { type: 'pay/checking' });
+    expect(state.payPhase).toBe('checking');
+    state = reduce(state, { type: 'pay/other-card' });
+    expect(state.payMode).toBe('card');
+    expect(state.payPhase).toBe('idle');
+    state = reduce(state, { type: 'pay/unresolved', code: 'AB12' });
+    expect(state.payPhase).toBe('unresolved');
+    expect(state.unresolvedCode).toBe('AB12');
+    state = reduce(state, { type: 'idle/prompt', until: 5_000 });
+    expect(state.dialog).toBeNull();
+    state = reduce(state, { type: 'pay/retry' });
+    state = reduce(state, { type: 'idle/prompt', until: 5_000 });
+    expect(state.dialog).toEqual({ kind: 'stillThere', until: 5_000 });
+    state = reduce(state, { type: 'idle/keep' });
+    expect(state.dialog).toBeNull();
+  });
+
+  it('drops unavailable lines when accepting a price change', () => {
+    let state = ready();
+    state = reduce(state, { type: 'start' });
+    state = reduce(state, { type: 'tile', itemId: 'chips' });
+    state = reduce(state, { type: 'tile', itemId: 'popcorn' });
+    state = reduce(state, { type: 'sheet/add' });
+    state = reduce(state, { type: 'review' });
+    state = reduce(state, {
+      type: 'pay/changed',
+      changed: {
+        error: 'order_changed',
+        message: 'Prices or availability changed.',
+        menuVersion: 'v2',
+        totalCents: 250,
+        lines: [
+          {
+            itemId: 'chips',
+            name: 'Salted chips',
+            choiceIds: [],
+            optionLabels: [],
+            qty: 1,
+            unitPriceCents: 250,
+            lineTotalCents: 250,
+          },
+        ],
+        unavailableItemIds: ['popcorn'],
+      },
+    });
+    state = reduce(state, { type: 'accept-price' });
+    expect(state.lines.map((line) => line.itemId)).toEqual(['chips']);
+  });
+
+  it('caps line quantity and preserves cart on a stale menu', () => {
+    let state = ready();
+    state = reduce(state, { type: 'start' });
+    state = reduce(state, { type: 'tile', itemId: 'chips' });
+    const key = state.lines[0]?.key ?? '';
+    for (let i = 0; i < 20; i += 1) state = reduce(state, { type: 'line/inc', key });
+    expect(state.lines[0]?.qty).toBe(10);
+    state = reduce(state, { type: 'menu/stale', menu: { ...menu, version: 'v2' } });
+    expect(state.lines).toHaveLength(1);
+    expect(state.apiDown).toBe(true);
+    expect(state.menu?.version).toBe('v2');
   });
 });

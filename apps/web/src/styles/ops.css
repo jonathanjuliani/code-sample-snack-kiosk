@@ -1,0 +1,224 @@
+.ops-layout {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  min-height: 100dvh;
+  background: var(--ground);
+}
+
+.ops {
+  max-width: 72rem;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: var(--sp-7) var(--sp-6);
+  overflow: visible;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.ops-layout > .ops {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+}
+
+.ops-sim {
+  position: sticky;
+  top: 0;
+  width: 280px;
+  height: 100dvh;
+  flex: none;
+  overflow-y: auto;
+  padding: var(--sp-4);
+  border-left: 1px solid color-mix(in srgb, var(--ground) 16%, var(--ink));
+  background: var(--ink);
+  color: var(--ground);
+  color-scheme: dark;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  user-select: text;
+}
+
+.ops-sim h2 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--ground);
+}
+
+.ops-sim-hint {
+  margin: 0 0 var(--sp-3);
+  color: color-mix(in srgb, var(--ground) 72%, var(--ink));
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+
+.ops-sim fieldset {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--ground) 18%, var(--ink));
+  border-radius: var(--r-sm);
+}
+
+.ops-sim legend {
+  padding: 0 var(--sp-2);
+  color: color-mix(in srgb, var(--ground) 72%, var(--ink));
+  font-size: var(--fs-xs);
+}
+
+.ops-sim label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0;
+  cursor: pointer;
+}
+
+.ops-sim-field {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.ops-sim select,
+.ops-sim button {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--ground) 24%, var(--ink));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--ground) 8%, var(--ink));
+  color: var(--ground);
+  font: inherit;
+}
+
+.ops-sim button {
+  margin-bottom: var(--sp-2);
+}
+
+.ops-sim select:focus-visible,
+.ops-sim button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.ops-sim-readout {
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  color: color-mix(in srgb, var(--ground) 82%, var(--ink));
+}
+
+.ops-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.ops-head h1,
+.ops h2 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+.ops-head p,
+.ops-meta,
+.ops-foot {
+  margin: 0;
+  color: var(--muted);
+}
+
+.ops-meta {
+  flex: none;
+  text-align: right;
+}
+
+.ops-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin: var(--sp-6) 0;
+}
+
+.ops-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.8fr);
+  gap: var(--sp-6);
+  align-items: start;
+}
+
+.ops-split > section {
+  min-width: 0;
+}
+
+.ops-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ops-count {
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+}
+
+.ops-count .num {
+  font-family: var(--font-display);
+  font-size: var(--fs-3xl);
+  font-weight: 800;
+}
+
+.ops table {
+  width: 100%;
+  margin: var(--sp-3) 0 var(--sp-6);
+  border-collapse: collapse;
+}
+
+.ops th,
+.ops td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--line-faint);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ops .r {
+  text-align: right;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  font-weight: 700;
+}
+
+.tag-paid {
+  background: color-mix(in srgb, var(--success) 12%, var(--ground));
+  color: var(--success);
+}
+
+.tag-payment_failed {
+  background: var(--error-tint);
+  color: var(--error-ink);
+}
+
+.tag-pending_payment {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.tag-stale {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}

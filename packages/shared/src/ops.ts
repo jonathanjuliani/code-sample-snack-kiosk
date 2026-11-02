@@ -104,6 +104,8 @@ export const opsSummarySchema = z.object({
   orders: z.array(opsOrderSchema).max(20),
 });
 
+export type KioskScreen = z.infer<typeof kioskScreenSchema>;
+export type KioskPayPhase = z.infer<typeof kioskPayPhaseSchema>;
 export type OpsEvent = z.infer<typeof opsEventSchema>;
 export type OpsCounters = z.infer<typeof opsCountersSchema>;
 export type OpsOrder = z.infer<typeof opsOrderSchema>;

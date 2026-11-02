@@ -1,0 +1,52 @@
+.attract {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--ink);
+  color: var(--ground);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-5);
+  padding: var(--sp-7);
+  font-family: var(--font-display);
+}
+
+.attract .brand {
+  margin: 0;
+  color: var(--highlight);
+  font-size: var(--fs-brand);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.attract h1 {
+  margin: 0;
+  font-size: var(--fs-display);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+}
+
+.attract .sub {
+  margin: 0;
+  max-width: 28rem;
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  font-weight: 400;
+}
+
+.attract .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--tap-lg);
+  margin-top: var(--sp-4);
+  padding: 0 var(--sp-6);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}

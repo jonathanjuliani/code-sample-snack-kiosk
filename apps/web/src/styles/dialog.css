@@ -1,0 +1,116 @@
+.dialog {
+  width: min(640px, 100%);
+  padding: var(--sp-7);
+  border-radius: var(--r-xl);
+  background: var(--ground);
+  box-shadow: var(--shadow-dialog);
+  animation: rise var(--dur-slow) var(--ease-out);
+}
+
+.dialog h2 {
+  margin: var(--sp-3) 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-dialog);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+}
+
+.dialog p {
+  margin: 0 0 var(--sp-4);
+  color: var(--muted-strong);
+}
+
+.dialog .icon {
+  display: grid;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: var(--r-pill);
+}
+
+.dialog .icon.warn {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.dialog .icon.err {
+  background: var(--error-tint);
+  color: var(--error-ink);
+}
+
+.wait {
+  border-color: color-mix(in srgb, var(--ink) 25%, transparent);
+  border-top-color: var(--ink);
+}
+
+.dialog .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  justify-content: flex-end;
+  margin-top: var(--sp-5);
+}
+
+.dialog .actions .primary {
+  width: auto;
+  min-width: 220px;
+}
+
+.changes {
+  width: 100%;
+  margin: var(--sp-3) 0;
+  border-collapse: collapse;
+}
+
+.changes td {
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.changes .r {
+  text-align: right;
+}
+
+.changes .old {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.new-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+}
+
+.ring {
+  display: grid;
+  place-items: center;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto var(--sp-4);
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p) * 360deg), var(--panel) 0);
+}
+
+.ring span {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--ground);
+  font-family: var(--font-display);
+  font-size: var(--fs-3xl);
+  font-weight: 800;
+}
+
+.code {
+  margin: var(--sp-4) 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-3xl);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}

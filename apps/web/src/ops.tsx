@@ -9,6 +9,7 @@ import {
 } from '@kiosk/shared';
 import { useEffect, useRef, useState } from 'react';
 import { fetchOpsSummary, fetchSimulation, putSimulation } from './api';
+import './styles/ops.css';
 
 const REFRESH_MS = 5000;
 const STALE_MS = 120_000;
