@@ -252,7 +252,7 @@ pnpm verify
 - Playwright for a declined card, a dropped submit ("Please don't pay again"), and `/ops` showing the pickup number from a checkout.
 - The running total is the live region. Recovery screens keep `role="alert"`.
 
-**Still skipped.** Stock races and a screen recording. See SKIPPED.
+**Still skipped.** Stock races and a screen recording. See Skipped in the [README](../README.md#skipped-and-why).
 
 ## Enhancement pass
 
@@ -273,8 +273,86 @@ pnpm verify
 - The paged six-up grid and the system-ui token set from the first mockup.
 - A 503 before the order existed. That could not demonstrate a lost response.
 - 90 seconds of idle at checkout, and a 15-second countdown. Each key already restarts the clock.
-- Portrait Playwright, an axe run, and a reload-mid-payment Playwright test. The features stay; the extra tests were the cut line. See SKIPPED.
+- Portrait Playwright, an axe run, and a reload-mid-payment Playwright test. The features stay; the extra tests were the cut line. See Skipped in the [README](../README.md#skipped-and-why).
 
 **Verification**
 
 `pnpm verify` (lint, typecheck, 12 shared + 22 API + 12 web tests) and `pnpm test:e2e` (12 passed at 1280×800). A fresh clone and my own read-through of this file were left for the final pass.
+
+## Final docs pass
+
+**What the tool was asked for**
+
+- Bring every doc up to date against a fresh run, not against what earlier entries said: one status per item in a new [COVERAGE](COVERAGE.md), a README in a fixed order, the missing DECISIONS entries, and [APPROACH](APPROACH.md). No application code was to change. A claim that turned out false gets reported, not fixed.
+- `verify-before-done` before any status was written, and `record-decision` for the new entries.
+
+**What was verified** (Node 24.22.2, pnpm 11.1.3, 2026-11-02)
+
+```
+pnpm i --frozen-lockfile     # 107 packages, exit 0
+pnpm typecheck               # shared, api, web: exit 0
+pnpm lint                    # exit 1: 1 error, apps/web/src/id.ts quote style
+pnpm test                    # 37 shared + 34 api + 37 web = 108 passed
+pnpm test:e2e                # 18 passed (48.4s), 1280×800 with touch
+docker compose up --build    # api healthy; /api/health {"status":"ok","payments":"up"}; page title "Snack Bar"
+fresh clone                  # install, typecheck, test pass; pnpm verify exits 1 at lint
+```
+
+Two notes on the run, both about the machine rather than the repo:
+
+- The container's Chromium was one build behind what Playwright 1.64 wanted, so I pointed Playwright at it from outside the repo.
+- The Docker build needed the machine's proxy certificate added in a scratch copy of the Dockerfiles.
+
+Then I checked by hand against the running stack:
+
+- the stored row and the API log for a card payment (no card number)
+- the log line for that order
+- a replay
+- a wrong total, a float total, a stale menu version
+- `If-None-Match`
+- a missing key
+- `PRAGMA journal_mode`
+
+In a browser I checked:
+
+- the slow card
+- a reload mid-payment
+- the portrait layout
+- target sizes
+- a one-off axe run over every kiosk screen and `/ops`
+
+The results are in [COVERAGE](COVERAGE.md).
+
+**Claims that turned out false, and how they're reported**
+
+- The README said the slow card `4000 0000 0000 9995` "approves after 15 seconds, longer than the kiosk waits" and listed it as the way to see "Checking your payment…". The kiosk has no client timeout. It shows "Processing payment…" for 15 seconds and then pays. The README now says that, and points at the rail's "No response, then approved" for H2.
+- The README said to trigger a price change by editing `apps/api/seed/menu.json` and restarting. The seed only inserts missing rows, so an existing database keeps the old price. The README now says so and points at the rail's "+$0.50".
+- The README said a replay answers with "the original status". A paid order replays as `200`, not `201`. Fixed in [API](API.md).
+- AGENTS.md and the README say `pnpm verify` is the check before finishing. On this commit it fails at lint. I didn't fix it here because this pass doesn't touch code. It's [COVERAGE T6](COVERAGE.md#traps-to-avoid-t).
+
+**What changed in the docs**
+
+- New:
+  - `docs/COVERAGE.md`: 38 items, 28 Handled, 9 Partial, 1 Not handled by choice.
+  - `docs/APPROACH.md`
+  - `docs/API.md`: the API tables, moved out of the README because Biome's Markdown formatter mis-measures a table that comes after characters like "…".
+  - `docs/screenshots/`
+- README:
+  - rewritten in a fixed order
+  - `docs/SKIPPED.md` folded into it and deleted
+- DECISIONS:
+  - D17 to D20 added
+  - "Superseded:" notes on D1's recovery copy and D5's button labels
+  - D10 and D12 reworded
+- PROCESS: Phase 7 renamed, and the SKIPPED links re-pointed.
+- CONTEXT: added "Checking", "Unresolved" and "Simulation rail".
+
+**Kept**
+
+- Every earlier PROCESS entry as I wrote it. Six of them miss one of asked / kept / thrown away / time (COVERAGE T9). I'd rather fill those from memory myself than have them invented.
+
+**Thrown away**
+
+- A README API table that Biome reformatted differently on every pass. It moved to `docs/API.md` instead of being fought.
+
+**Time**: about 40 minutes of agent time on the clock, including the Docker build and two full Playwright runs.

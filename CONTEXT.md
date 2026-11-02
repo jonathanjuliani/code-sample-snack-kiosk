@@ -12,3 +12,6 @@
 - **Needs attention**: any screen that replaces the payment area when reality didn't cooperate: payment unknown, total changed, declined, API down.
 - **Venue**: the name and accent returned with the menu. The kiosk shows that name. The accent is used only when white text on it stays readable.
 - **Staff assist**: a request from the kiosk (`POST /kiosk/assist`) that shows up on the counter page. Idle waits while one is open.
+- **Checking**: the pay phase after a submit whose outcome the kiosk doesn't know (a dropped response, a `202`, or a reload mid-payment). The kiosk asks `GET /orders?idempotencyKey=` and never starts a new charge.
+- **Unresolved**: checking ran for 30 seconds without an answer. The customer gets a code (`K` + the first 4 characters of the key) to show at the counter. The order stays `pending_payment`.
+- **Simulation rail**: the right-hand panel on `/ops` that sets in-memory flags (next payment result, payments paused, menu fails, a price bump, a sold-out item) so each recovery screen can be forced. Not a staff tool.
