@@ -42,10 +42,19 @@ test('a reload before a card payment lands goes back to Pay and sends nothing', 
   const held: Route[] = [];
   let postsAfterReload = 0;
   let reloaded = false;
+  let releaseLookup = () => {};
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
   await page.route('**/api/orders**', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    if (reloaded) postsAfterReload += 1;
-    held.push(route); // never reaches the API
+    if (route.request().method() === 'POST') {
+      if (reloaded) postsAfterReload += 1;
+      held.push(route); // never reaches the API
+      return;
+    }
+    // Hold the lookup until the test has seen "Checking", or a fast 404 skips past it.
+    if (reloaded && route.request().url().includes('idempotencyKey')) await lookupGate;
+    await route.continue();
   });
 
   await openMenu(page, '/?kiosk=e2e-reload-lost');
@@ -59,6 +68,7 @@ test('a reload before a card payment lands goes back to Pay and sends nothing', 
   reloaded = true;
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Checking your payment…' })).toBeVisible();
+  releaseLookup();
   await expect(page.getByRole('heading', { name: 'Checking your payment…' })).toBeHidden({ timeout: 10_000 });
   await expect(page.getByRole('heading', { name: 'How would you like to pay?' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Your order' }).getByText('Salted chips')).toBeVisible();
