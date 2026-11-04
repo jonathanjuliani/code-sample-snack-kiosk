@@ -1,4 +1,4 @@
-import { CARD_NUMBER_DIGITS, menuSchema, type OrderRequest } from '@kiosk/shared';
+import { menuSchema, type OrderRequest } from '@kiosk/shared';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   fetchHealth,
@@ -37,6 +37,7 @@ import {
 } from './dialogs';
 import { DoneScreen } from './done-screen';
 import {
+  afterNotFound,
   canPay,
   cartCount,
   cartTotalCents,
@@ -335,10 +336,18 @@ export function Kiosk() {
     if (state.payPhase !== 'checking' || !state.idempotencyKey) return;
     let cancelled = false;
     const key = state.idempotencyKey;
+    // Start the 30s clock here, not only in applyResult: after a reload the kiosk enters checking from restore.
+    checkingSince.current ??= Date.now();
+    const pollAgain = () => {
+      window.setTimeout(() => {
+        void poll();
+      }, 1500);
+    };
     const poll = async () => {
       if (cancelled) return;
       if (checkingSince.current && Date.now() - checkingSince.current > TIMEOUTS.paymentCheckLimitMs) {
         dispatch({ type: 'pay/unresolved', code: `K${key.slice(0, 4).toUpperCase()}` });
+        checkingSince.current = null;
         payLock.current = false;
         return;
       }
@@ -354,24 +363,26 @@ export function Kiosk() {
           return;
         }
         if (!found) {
-          const body = buildRequest();
-          if (body?.payment.method === 'card' && body.payment.cardNumber.length === CARD_NUMBER_DIGITS) {
-            const result = await submitOrder(key, body);
-            if (!cancelled) applyResult(result, key);
+          const body = afterNotFound(stateRef.current) === 'resend' ? buildRequest() : null;
+          if (!body) {
+            checkingSince.current = null;
+            payLock.current = false;
+            clearAttempt();
+            dispatch({ type: 'pay/not-found' });
             return;
           }
-          if (body?.payment.method === 'tap') {
-            const result = await submitOrder(key, body);
-            if (!cancelled) applyResult(result, key);
-            return;
-          }
+          const result = await submitOrder(key, body);
+          if (cancelled) return;
+          applyResult(result, key);
+          // Still no final answer: keep asking, or the 30s limit is never checked again.
+          if (result.kind === 'pending' || result.kind === 'network' || result.kind === 'unavailable')
+            pollAgain();
+          return;
         }
       } catch {
         dispatch({ type: 'api/down' });
       }
-      window.setTimeout(() => {
-        void poll();
-      }, 1500);
+      pollAgain();
     };
     void poll();
     return () => {

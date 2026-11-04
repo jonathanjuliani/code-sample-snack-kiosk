@@ -5,7 +5,7 @@ export {
   qtyOfItem,
   unitPriceCents,
 } from './cart.ts';
-export { canPay, idleLimitMs, inPayment } from './pay.ts';
+export { afterNotFound, canPay, idleLimitMs, inPayment } from './pay.ts';
 export { reduce } from './reduce.ts';
 export {
   type Action,

@@ -131,7 +131,7 @@ Short records of choices that outlive a single change. Each says what was reject
 - _`GET /orders/:id` only_ (rejected as the reload path): if the response was lost, the client never learned the order id.
 - _Re-send the original `POST`_ (rejected): the card number can't be kept in `sessionStorage`, so the retried body would differ and get `422`.
 
-**Consequences**: `GET /orders/:id` stays for staff and debugging. Within one page session, a network drop still retries the original `POST` with the same key (the card number is in memory).
+**Consequences**: `GET /orders/:id` stays for staff and debugging. Within one page session, a network drop still retries the original `POST` with the same key (the card number is in memory). After a reload the kiosk never re-sends: a `404` sends it back to Pay with the cart intact (`afterNotFound` in `machine/pay.ts`), and the 30-second checking limit starts on restore too. Before 2026-11-04 a restored attempt fell back to the default `tap` mode and could re-send as a tap payment, and the limit never started after a reload; `e2e/reload-pay.spec.ts` covers both.
 
 ## D9. The counter page is unauthenticated
 

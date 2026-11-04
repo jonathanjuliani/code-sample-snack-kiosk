@@ -76,7 +76,7 @@ Solving everything was never the goal. Deciding what to leave out, and saying so
 
 ## 5. Proving it
 
-The tests aim at the paths that can hurt someone, not at a coverage number: double submit, a response dropped after the order was saved, decline then another card, a changed price, a sold-out line, a menu that won't load, payments going down, idle both ways, a payment that never answers. That's 108 unit and HTTP tests and 18 browser tests ([S6](COVERAGE.md#should-handle-s)).
+The tests aim at the paths that can hurt someone, not at a coverage number: double submit, a response dropped after the order was saved, decline then another card, a changed price, a sold-out line, a menu that won't load, payments going down, idle both ways, a payment that never answers. That's 110 unit and HTTP tests and 20 browser tests ([S6](COVERAGE.md#should-handle-s)).
 
 To see the failures without reading tests there are test cards, two chaos flags, and a simulation rail on `/ops` that forces each recovery screen on a real tablet ([D16](DECISIONS.md#d16-the-counter-can-force-the-recovery-cases)).
 

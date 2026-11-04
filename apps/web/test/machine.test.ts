@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  afterNotFound,
   canPay,
   cartTotalCents,
   createInitialState,
@@ -182,6 +183,39 @@ describe('kiosk machine', () => {
     expect(state.screen).toBe('checkout');
     expect(state.payPhase).toBe('checking');
     expect(state.lines).toHaveLength(1);
+  });
+
+  it('goes back to Pay when a resumed attempt never reached the API', () => {
+    let state = reduce(ready(), { type: 'tile', itemId: 'chips' });
+    state = reduce(state, {
+      type: 'restore',
+      lines: state.lines,
+      key: '11111111-1111-4111-8111-111111111111',
+    });
+    expect(state.resumed).toBe(true);
+    // A card attempt restored after a reload: payMode is back to its default, and no digits survived.
+    expect(state.payMode).toBe('tap');
+    expect(afterNotFound(state)).toBe('back-to-pay');
+
+    state = reduce(state, { type: 'pay/not-found' });
+    expect(state.payPhase).toBe('idle');
+    expect(state.idempotencyKey).toBeNull();
+    expect(state.resumed).toBe(false);
+    expect(state.screen).toBe('checkout');
+    expect(state.lines).toHaveLength(1);
+  });
+
+  it('re-sends a lost request only while this page session can still build it', () => {
+    let state = reduce(ready(), { type: 'tile', itemId: 'chips' });
+    state = reduce(state, { type: 'review' });
+    expect(afterNotFound(state)).toBe('resend');
+
+    state = reduce(state, { type: 'pay/mode', mode: 'card' });
+    expect(afterNotFound(state)).toBe('back-to-pay');
+    for (const digit of '4242424242424242') state = reduce(state, { type: 'pay/digit', digit });
+    state = reduce(state, { type: 'pay/lock', key: '22222222-2222-4222-8222-222222222222' });
+    expect(state.resumed).toBe(false);
+    expect(afterNotFound(state)).toBe('resend');
   });
 
   it('disables pay while the API is down', () => {

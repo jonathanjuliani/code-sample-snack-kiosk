@@ -62,6 +62,8 @@ export type KioskState = {
   menuStatus: MenuStatus;
   apiDown: boolean;
   idempotencyKey: string | null;
+  /** The attempt came back from sessionStorage after a reload: only its key survived, not the request body. */
+  resumed: boolean;
 };
 
 export type Action =
@@ -100,6 +102,7 @@ export type Action =
   | { type: 'pay/declined' }
   | { type: 'pay/changed'; changed: OrderChanged }
   | { type: 'pay/unresolved'; code: string }
+  | { type: 'pay/not-found' }
   | { type: 'pay/retry' }
   | { type: 'pay/other-card' }
   | { type: 'assist/open' }
@@ -134,5 +137,6 @@ export function createInitialState(): KioskState {
     menuStatus: 'loading',
     apiDown: false,
     idempotencyKey: null,
+    resumed: false,
   };
 }
