@@ -62,12 +62,12 @@ pnpm verify
 pnpm test:e2e
 ```
 
-`pnpm verify` runs `biome check`, `tsc` in every package, and Vitest in every package. On 2026-11-02:
+`pnpm verify` runs `biome check`, `tsc` in every package, and Vitest in every package. On 2026-11-02, with the test counts updated after the reload fix on 2026-11-04:
 
 - `pnpm typecheck`: clean in all three packages.
-- `pnpm test`: 108 passed (shared 37, API 34, web 37).
+- `pnpm test`: 110 passed (shared 37, API 34, web 39).
 - `pnpm lint`: clean (92 files). It failed on one unformatted file in the first docs pass; that's fixed, and it's now gated (below).
-- `pnpm test:e2e`: 18 passed in 48s. It starts its own API on 3010 and Vite on 5180, with a throwaway database at 1280×800 with touch.
+- `pnpm test:e2e`: 20 passed in 46s. It starts its own API on 3010 and Vite on 5180, with a throwaway database at 1280×800 with touch.
 
 **What stops a broken check from landing**
 

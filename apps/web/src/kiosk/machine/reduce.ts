@@ -155,7 +155,7 @@ export function reduce(state: KioskState, action: Action): KioskState {
     case 'pay/clear':
       return { ...state, cardDigits: '' };
     case 'pay/lock':
-      return { ...state, payPhase: 'processing', idempotencyKey: action.key, dialog: null };
+      return { ...state, payPhase: 'processing', idempotencyKey: action.key, dialog: null, resumed: false };
     case 'pay/checking':
       return { ...state, payPhase: 'checking' };
     case 'pay/paid':
@@ -207,6 +207,16 @@ export function reduce(state: KioskState, action: Action): KioskState {
         menu: state.menu ? { ...state.menu, version: action.changed.menuVersion } : state.menu,
       };
     }
+    case 'pay/not-found':
+      // The request never reached the API, so nobody was charged. Back to Pay with the cart intact (D8).
+      return {
+        ...state,
+        payPhase: 'idle',
+        idempotencyKey: null,
+        cardDigits: '',
+        priceChange: null,
+        resumed: false,
+      };
     case 'pay/unresolved':
       return { ...state, payPhase: 'unresolved', unresolvedCode: action.code };
     case 'pay/retry':
@@ -252,6 +262,7 @@ export function reduce(state: KioskState, action: Action): KioskState {
         ...state,
         lines: action.lines,
         idempotencyKey: action.key,
+        resumed: action.key !== null,
         screen: action.key ? 'checkout' : state.screen,
         payPhase: action.key ? 'checking' : state.payPhase,
       };
